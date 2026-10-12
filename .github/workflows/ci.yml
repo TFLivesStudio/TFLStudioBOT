@@ -6,6 +6,20 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: studio
+          POSTGRES_PASSWORD: studio_ci_only
+          POSTGRES_DB: studio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studio -d studio_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,3 +29,17 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Verify PostgreSQL migrations are idempotent
+        run: npm run migrate && npm run migrate
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgres://studio:studio_ci_only@127.0.0.1:5432/studio_test
+          BOT_TOKEN: ci_FAKE_bot_token_for_local_tests_123456789
+          DISCORD_CLIENT_ID: '1559294093962510386'
+          DISCORD_CLIENT_SECRET: ci_FAKE_client_secret_123456789
+          DISCORD_GUILD_ID: '1264656310205415474'
+          ADMIN_ROLE_ID: '1282541815802892289'
+          PUBLIC_API_URL: http://localhost:8080
+          FRONTEND_URL: http://localhost:3000
+          CORS_ORIGIN: http://localhost:3000
+          COOKIE_SECURE: 'false'
