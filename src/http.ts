@@ -11,6 +11,8 @@ import { DEPARTMENTS, IDS, type DepartmentKey } from "./ids.js";
 import { createReport } from "./reports.js";
 import { verifyGitHubSignature,handleGithubEvent } from "./github.js";
 import { OPENAPI } from "./openapi.js";
+import { visualSchema } from "./presentation.js";
+import { transaction } from "./db.js";
 import { canUseChannel } from "./permissions.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
@@ -137,10 +139,10 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.post("/api/v1/announcements",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
-    const d=query(z.object({targetChannelId:z.string().regex(/^\d{17,20}$/),title:text.max(100),body:text.max(1800)}),req.body);
+    const d=query(z.object({targetChannelId:z.string().regex(/^\d{17,20}$/),title:text.max(100),body:text.max(1800),visual:visualSchema.default({embeds:[]})}),req.body);
     // Only whitelisted audited announcement channel, never arbitrary channels or @everyone.
     if(d.targetChannelId!==IDS.channels.anuncios) throw Object.assign(new Error("Destination not whitelisted"),{statusCode:400});
-    const saved=await db.query<{id:string}>("INSERT INTO announcements(target_channel_id,title,body,author_id) VALUES($1,$2,$3,$4) RETURNING id",[d.targetChannelId,d.title,d.body,actor.userId]);
+    const saved=await db.query<{id:string}>("INSERT INTO announcements(target_channel_id,title,body,author_id,visual_payload) VALUES($1,$2,$3,$4,$5) RETURNING id",[d.targetChannelId,d.title,d.body,actor.userId,JSON.stringify(d.visual)]);
     await audit(db,"announcement.draft",actor.userId,"announcement",saved.rows[0]!.id);
     return {id:saved.rows[0]!.id};
   });
@@ -148,11 +150,55 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
     const id=query(z.object({id:idSchema}),req.params).id;
     const d=query(z.object({runAt:z.string().datetime(),confirm:z.literal(true)}),req.body);
-    const data=await db.query("UPDATE announcements SET status='scheduled',scheduled_at=$2 WHERE id=$1 AND status='draft' RETURNING id",[id,d.runAt]);
-    if(!data.rowCount) throw Object.assign(new Error("Draft not found"),{statusCode:404});
-    await db.query("INSERT INTO automation_jobs(kind,payload,run_at,dedup_key) VALUES('announcement',$1,$2,$3) ON CONFLICT DO NOTHING",[JSON.stringify({id}),d.runAt,"announcement:"+id]);
+    await transaction(db,async c=>{
+      const data=await c.query("UPDATE announcements SET status='scheduled',scheduled_at=$2 WHERE id=$1 AND status='draft' RETURNING id",[id,d.runAt]);
+      if(!data.rowCount) throw Object.assign(new Error("Draft not found"),{statusCode:404});
+      await c.query("INSERT INTO automation_jobs(kind,payload,run_at,dedup_key) VALUES('announcement',$1,$2,$3) ON CONFLICT DO NOTHING",[JSON.stringify({id}),d.runAt,"announcement:"+id]);
+    });
     await audit(db,"announcement.schedule",actor.userId,"announcement",String(id),{runAt:d.runAt});
     return {ok:true};
+  });
+
+  app.get("/api/v1/announcements/:id/preview",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    const id=query(z.object({id:idSchema}),req.params).id;
+    const data=await db.query("SELECT title,body,visual_payload,status FROM announcements WHERE id=$1",[id]);
+    if(!data.rows.length) throw Object.assign(new Error("Draft not found"),{statusCode:404});
+    return {preview:data.rows[0],note:"Unpublished, visual data is an API preview, not a Discord render"};
+  });
+  app.get("/api/v1/announcements/templates",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    return {items:(await db.query("SELECT * FROM announcement_templates ORDER BY name")).rows};
+  });
+  app.post("/api/v1/announcements/templates",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const d=query(z.object({name:text.max(90),visual:visualSchema}),req.body);
+    const result=await db.query<{id:string}>("INSERT INTO announcement_templates(name,visual_payload,created_by) VALUES($1,$2,$3) ON CONFLICT(name) DO UPDATE SET visual_payload=EXCLUDED.visual_payload,updated_at=now() RETURNING id",[d.name,JSON.stringify(d.visual),actor.userId]);
+    await audit(db,"template.upsert",actor.userId,"announcement_template",result.rows[0]!.id);
+    return {id:result.rows[0]!.id};
+  });
+  app.patch("/api/v1/guides/:id",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const id=query(z.object({id:idSchema}),req.params).id;
+    const d=query(z.object({expectedVersion:z.number().int().positive(),category:text.max(100),title:text.max(160),body:text.max(15000),visibilityDepartment:departmentSchema.nullable()}),req.body);
+    const updated=await transaction(db,async c=>{
+      const previous=await c.query<{id:string;version:number;title:string;body:string;category:string;visibility_department:string|null}>("SELECT * FROM guides WHERE id=$1 FOR UPDATE",[id]);
+      const old=previous.rows[0];
+      if(!old) throw Object.assign(new Error("Guide not found"),{statusCode:404});
+      if(old.version!==d.expectedVersion) throw Object.assign(new Error("Guide version conflict"),{statusCode:409});
+      await c.query("INSERT INTO guide_revisions(guide_id,version,title,body,category,visibility_department,edited_by) VALUES($1,$2,$3,$4,$5,$6,$7)",[id,old.version,old.title,old.body,old.category,old.visibility_department,actor.userId]);
+      return c.query("UPDATE guides SET title=$2,body=$3,category=$4,visibility_department=$5,version=version+1,updated_by=$6,updated_at=now() WHERE id=$1 RETURNING id,version",[id,d.title,d.body,d.category,d.visibilityDepartment,actor.userId]);
+    });
+    await audit(db,"guide.update",actor.userId,"guide",String(id),{version:updated.rows[0]?.version});
+    return updated.rows[0];
+  });
+  app.post("/api/v1/github/sources",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const d=query(z.object({repository:z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),department:departmentSchema,defaultBranch:text.max(100).default("main")}),req.body);
+    const result=await db.query<{id:string}>("INSERT INTO github_sources(repository,department,default_branch,enabled) VALUES($1,$2,$3,false) ON CONFLICT(repository) DO NOTHING RETURNING id",[d.repository,d.department,d.defaultBranch]);
+    if(!result.rowCount)throw Object.assign(new Error("Repository already configured"),{statusCode:409});
+    await audit(db,"github.source.add",actor.userId,"github_source",result.rows[0]!.id,{repo:d.repository});
+    return {id:result.rows[0]!.id,enabled:false};
   });
   app.get("/api/v1/github/sources",async(req)=>{
     await requireUser(req,db,config,{admin:true});
@@ -162,7 +208,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
     const id=query(z.object({id:idSchema}),req.params).id;
     const d=query(z.object({enabled:z.boolean(),pushEnabled:z.boolean(),releaseEnabled:z.boolean(),batchMinutes:z.number().int().min(5).max(1440)}),req.body);
-    const result=await db.query("UPDATE github_sources SET enabled=$2,push_enabled=$3,release_enabled=$4,batch_minutes=$5 WHERE id=$1 RETURNING id",[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes]);
+    const result=await db.query("UPDATE github_sources SET enabled=$2,push_enabled=$3,release_enabled=$4,batch_minutes=$5,enabled_at=CASE WHEN enabled=false AND $2=true THEN now() ELSE enabled_at END WHERE id=$1 RETURNING id",[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes]);
     if(!result.rowCount) throw Object.assign(new Error("Source not found"),{statusCode:404});
     await audit(db,"github.configure",actor.userId,"github_source",String(id));
     return {ok:true};

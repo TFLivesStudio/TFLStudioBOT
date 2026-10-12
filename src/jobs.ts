@@ -2,10 +2,10 @@ import type { Client } from "discord.js";
 import type { DB } from "./db.js";
 import { createReport } from "./reports.js";
 import { audit } from "./audit.js";
-import { fetchGithubRepository } from "./github.js";
+import { fetchGithubRepository,pollGithubCommits } from "./github.js";
 import type { Config } from "./config.js";
 import type { DepartmentKey } from "./ids.js";
-import { postToDestination } from "./discord.js";
+import { postAnnouncement } from "./presentation.js";
 
 type Job = {id:string;kind:string;payload:any;attempts:number};
 export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
@@ -42,12 +42,12 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
       // After this job has completed, a new push can schedule a fresh batch.
     } else if(job.kind === "announcement") {
       const id=Number(job.payload.id);
-      const found=await db.query<{target_channel_id:string;title:string;body:string;status:string}>("SELECT * FROM announcements WHERE id=$1 FOR UPDATE",[id]);
+      const found=await db.query<{target_channel_id:string;title:string;body:string;status:string;visual_payload:unknown}>("SELECT * FROM announcements WHERE id=$1",[id]);
       const item=found.rows[0];
       if (!item || item.status !== "scheduled") throw new Error("Scheduled announcement unavailable");
       await db.query("UPDATE announcements SET status='publishing' WHERE id=$1",[id]);
-      const message=await postToDestination(discord,item.target_channel_id,item.title,item.body);
-      await db.query("UPDATE announcements SET status='published',published_at=now(),discord_message_id=$2 WHERE id=$1",[id,message.messageId]);
+      const messageId=await postAnnouncement(discord,item.target_channel_id,item.title,item.body,item.visual_payload);
+      await db.query("UPDATE announcements SET status='published',published_at=now(),discord_message_id=$2 WHERE id=$1",[id,messageId]);
     } else {
       throw new Error("Unknown job kind: "+job.kind);
     }
@@ -81,7 +81,7 @@ export function launchWorker(db: DB, discord: Client, config: Config): () => voi
       await db.query("UPDATE automation_jobs SET status='needs_reconciliation',last_error='Interrupted while running' WHERE status='running' AND locked_at<now()-interval '10 minutes'");
       if(config.GITHUB_POLL_ENABLED) {
         const sources=await db.query<{repository:string}>("SELECT repository FROM github_sources WHERE enabled AND release_enabled");
-        for(const s of sources.rows) await fetchGithubRepository(db,config,s.repository);
+        for(const s of sources.rows) {await fetchGithubRepository(db,config,s.repository);await pollGithubCommits(db,config,s.repository);}
       }
     } catch(e){console.error("worker_sweep_failed",e);}
   },300000);
