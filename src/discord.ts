@@ -29,7 +29,7 @@ export function buildDiscord(config: Config, db: DB): Client {
         await interaction.deferReply({ephemeral:true});
         const member=await interaction.guild?.members.fetch(interaction.user.id);
         if (!member?.roles.cache.has(config.ADMIN_ROLE_ID)) {await interaction.editReply("Sin autorización.");return;}
-        const files=await collectStructure(client,db,interaction.user.id);
+        const files=await collectStructure(client,db,interaction.user.id,config);
         await interaction.editReply({content:"Inventario estructural parcial, sin mensajes privados ni credenciales.",files:[files.json,files.markdown]});
         return;
       }

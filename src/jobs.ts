@@ -7,6 +7,7 @@ import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { postAnnouncement } from "./presentation.js";
 import { postToDestination } from "./discord.js";
 import { runImportBatch } from "./report-import.js";
+import { captureStructure } from "./auditor.js";
 
 type Job = {id:string;kind:string;payload:Record<string,unknown>;attempts:number};
 const safeMessage=(e:unknown) => e instanceof Error ? e.name.slice(0,40)+": "+e.message.slice(0,250) : "Unknown error";
@@ -40,7 +41,21 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       if(!(sourceRow.department in DEPARTMENTS))throw new Error("Destination not configured");
       destination=sourceRow.department as DepartmentKey;
     }
-    if(job.kind==="history_import"){
+    if(job.kind==="auditor_snapshot"){
+      if(!config)throw new Error("Auditor requires configuration");
+      const id=String(job.payload.snapshotId);
+      const selected=await db.query<{options:{includeArchived?:boolean;maxArchivedPerForum?:number};status:string}>(
+        "SELECT options,status FROM audit_snapshots WHERE id=$1",[id]);
+      const row=selected.rows[0];
+      if(!row || row.status==="done")return true;
+      await db.query("UPDATE audit_snapshots SET status='running' WHERE id=$1",[id]);
+      const output=await captureStructure(discord,config,{
+        includeArchived:row.options.includeArchived??false,
+        maxArchivedPerForum:row.options.maxArchivedPerForum??100
+      });
+      await db.query("UPDATE audit_snapshots SET status='done',snapshot=$2,markdown=$3,completeness=$4,finished_at=now(),error=NULL WHERE id=$1",
+        [id,JSON.stringify(output.data),output.markdown,output.data.completeness]);
+    }else if(job.kind==="history_import"){
       if(!config)throw new Error("Import worker requires configuration");
       const id=String(job.payload.runId);
       await db.query("UPDATE report_import_runs SET status='running' WHERE id=$1 AND status='queued'",[id]);
@@ -118,6 +133,8 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
     const delay=Math.min(300,10*(2**Math.min(5,job.attempts)));
     await db.query("UPDATE automation_jobs SET status=$2,last_error=$3,updated_at=now(),run_at=now()+($4::int*interval '1 second') WHERE id=$1",
       [job.id,status,err,delay]);
+    if(job.kind==="auditor_snapshot")await db.query(
+      "UPDATE audit_snapshots SET status=$2,error=$3 WHERE id=$1",[job.payload.snapshotId,status==="queued"?"queued":"failed",err]);
     if(job.kind==="report_publish" && remoteStarted)await db.query(
       "UPDATE reports SET publication_status='needs_reconciliation',sync_state='unknown',updated_at=now() WHERE id=$1",[job.payload.reportId]);
     await completeAttempt(db,job,status,err);

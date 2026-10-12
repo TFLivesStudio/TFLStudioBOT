@@ -17,6 +17,7 @@ import { getStaffMember } from "./staff.js";
 import { canUseChannel,visibleDepartments } from "./permissions.js";
 import { registerJobAdmin } from "./job-admin.js";
 import { registerIndexRoutes } from "./index-routes.js";
+import { registerAuditorRoutes } from "./auditor-routes.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -277,18 +278,19 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
       defaultBranch:z.string().regex(/^[A-Za-z0-9._/-]{1,100}$/).optional(),
       allowPrereleases:z.boolean().optional()
     }),req.body);
-    const result=await db.query("UPDATE github_sources SET enabled=$2,push_enabled=$3,release_enabled=$4,batch_minutes=$5,
+    const result=await db.query(`UPDATE github_sources SET enabled=$2,push_enabled=$3,release_enabled=$4,batch_minutes=$5,
         default_branch=COALESCE($6,default_branch),
         last_commit_sha=CASE WHEN $6 IS NOT NULL AND $6<>default_branch THEN NULL ELSE last_commit_sha END,
         allow_prereleases=COALESCE($7,allow_prereleases),
         enabled_at=CASE WHEN enabled=false AND $2=true THEN now() ELSE enabled_at END
-        WHERE id=$1 RETURNING id",[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes,d.defaultBranch??null,d.allowPrereleases??null]);
+        WHERE id=$1 RETURNING id`,[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes,d.defaultBranch??null,d.allowPrereleases??null]);
     if(!result.rowCount) throw Object.assign(new Error("Source not found"),{statusCode:404});
     await audit(db,"github.configure",actor.userId,"github_source",String(id));
     return {ok:true};
   });
   await registerJobAdmin(app,db,config,discord);
   await registerIndexRoutes(app,db,config);
+  await registerAuditorRoutes(app,db,config);
 
   app.post("/api/v1/github/sources/:id/sync",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
