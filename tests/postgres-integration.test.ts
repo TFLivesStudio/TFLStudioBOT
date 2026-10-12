@@ -20,6 +20,7 @@ test("PostgreSQL: outbox, claim concurrency, unique indexes and incremental repo
     type:0,send:async()=>({id:discordMessageId,url:"https://discord.com/channels/"+IDS.guild+"/"+IDS.channels.hosting+"/"+discordMessageId})
   })}} as unknown as Client;
   const cleanup=async()=>{
+    await pool.query("DELETE FROM job_attempts WHERE job_id IN (SELECT id FROM automation_jobs WHERE dedup_key=$1 OR payload->>'reportId' IN (SELECT id::text FROM reports WHERE external_key=$2))",["report:"+key,key]);
     await pool.query("DELETE FROM automation_jobs WHERE dedup_key=$1 OR payload->>'reportId' IN (SELECT id::text FROM reports WHERE external_key=$2)",["report:"+key,key]);
     await pool.query("DELETE FROM reports WHERE external_key IN ($1,$2)",[key,"discord:"+discordMessageId]);
   };
