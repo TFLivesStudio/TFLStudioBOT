@@ -258,7 +258,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.post("/api/v1/github/sources",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
-    const d=query(z.object({repository:z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),department:departmentSchema,defaultBranch:text.max(100).default("main")}),req.body);
+    const d=query(z.object({repository:z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),department:departmentSchema,defaultBranch:z.string().regex(/^[A-Za-z0-9._/-]{1,100}$/).default("main")}),req.body);
     const result=await db.query<{id:string}>("INSERT INTO github_sources(repository,department,default_branch,enabled) VALUES($1,$2,$3,false) ON CONFLICT(repository) DO NOTHING RETURNING id",[d.repository,d.department,d.defaultBranch]);
     if(!result.rowCount)throw Object.assign(new Error("Repository already configured"),{statusCode:409});
     await audit(db,"github.source.add",actor.userId,"github_source",result.rows[0]!.id,{repo:d.repository});
@@ -271,14 +271,42 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   app.patch("/api/v1/github/sources/:id",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
     const id=query(z.object({id:idSchema}),req.params).id;
-    const d=query(z.object({enabled:z.boolean(),pushEnabled:z.boolean(),releaseEnabled:z.boolean(),batchMinutes:z.number().int().min(5).max(1440)}),req.body);
-    const result=await db.query("UPDATE github_sources SET enabled=$2,push_enabled=$3,release_enabled=$4,batch_minutes=$5,enabled_at=CASE WHEN enabled=false AND $2=true THEN now() ELSE enabled_at END WHERE id=$1 RETURNING id",[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes]);
+    const d=query(z.object({
+      enabled:z.boolean(),pushEnabled:z.boolean(),releaseEnabled:z.boolean(),
+      batchMinutes:z.number().int().min(5).max(1440),
+      defaultBranch:z.string().regex(/^[A-Za-z0-9._/-]{1,100}$/).optional(),
+      allowPrereleases:z.boolean().optional()
+    }),req.body);
+    const result=await db.query("UPDATE github_sources SET enabled=$2,push_enabled=$3,release_enabled=$4,batch_minutes=$5,
+        default_branch=COALESCE($6,default_branch),
+        last_commit_sha=CASE WHEN $6 IS NOT NULL AND $6<>default_branch THEN NULL ELSE last_commit_sha END,
+        allow_prereleases=COALESCE($7,allow_prereleases),
+        enabled_at=CASE WHEN enabled=false AND $2=true THEN now() ELSE enabled_at END
+        WHERE id=$1 RETURNING id",[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes,d.defaultBranch??null,d.allowPrereleases??null]);
     if(!result.rowCount) throw Object.assign(new Error("Source not found"),{statusCode:404});
     await audit(db,"github.configure",actor.userId,"github_source",String(id));
     return {ok:true};
   });
   await registerJobAdmin(app,db,config,discord);
   await registerIndexRoutes(app,db,config);
+
+  app.post("/api/v1/github/sources/:id/sync",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const id=query(z.object({id:idSchema}),req.params).id;
+    const options=query(z.object({commits:z.boolean().default(true),releases:z.boolean().default(true)}),req.body);
+    const source=await db.query<{repository:string;enabled:boolean;push_enabled:boolean;release_enabled:boolean}>(
+      "SELECT repository,enabled,push_enabled,release_enabled FROM github_sources WHERE id=$1",[id]);
+    const data=source.rows[0];
+    if(!data?.enabled)throw Object.assign(new Error("Source is not enabled"),{statusCode:409});
+    const jobs=[];
+    if(options.commits && data.push_enabled)jobs.push("github_sync");
+    if(options.releases && data.release_enabled)jobs.push("github_releases_sync");
+    if(!jobs.length)throw Object.assign(new Error("Selected flows are disabled"),{statusCode:409});
+    for(const kind of jobs)await db.query("INSERT INTO automation_jobs(kind,payload,origin) VALUES($1,$2,'admin')",
+      [kind,JSON.stringify({repo:data.repository})]);
+    await audit(db,"github.sync.request",actor.userId,"github_source",String(id),{jobs});
+    return {queued:jobs};
+  });
   app.get("/api/v1/audit",async(req)=>{
     await requireUser(req,db,config,{admin:true});
     const q=query(page,req.query);

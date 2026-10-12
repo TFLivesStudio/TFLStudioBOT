@@ -32,7 +32,7 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       const source=await db.query<{enabled:boolean;department:string;push_enabled:boolean;release_enabled:boolean}>(
         "SELECT enabled,department,push_enabled,release_enabled FROM github_sources WHERE repository=$1",[repository]);
       const sourceRow=source.rows[0];
-      if(!sourceRow?.enabled || (job.kind==="github_release" && !sourceRow.release_enabled) || (job.kind==="github_push_summary" && !sourceRow.push_enabled)){
+      if(!sourceRow?.enabled || (["github_release","github_releases_sync"].includes(job.kind) && !sourceRow.release_enabled) || (["github_push_summary","github_sync"].includes(job.kind) && !sourceRow.push_enabled)){
         await db.query("UPDATE automation_jobs SET status='cancelled',last_error='Source disabled' WHERE id=$1",[job.id]);
         await completeAttempt(db,job,"cancelled");
         return true;
@@ -66,10 +66,16 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
         [id,posted.messageId,posted.threadId]);
       await db.query("UPDATE automation_jobs SET remote_message_id=$2,remote_channel_id=$3 WHERE id=$1",
         [job.id,posted.messageId,posted.threadId??destinationId]);
+    }else if(job.kind==="github_sync"){
+      if(!config)throw new Error("GitHub sync requires configuration");
+      await pollGithubCommits(db,config,String(job.payload.repo));
+    }else if(job.kind==="github_releases_sync"){
+      if(!config)throw new Error("GitHub release sync requires configuration");
+      await fetchGithubRepository(db,config,String(job.payload.repo));
     }else if(job.kind==="github_release"){
       const p=job.payload;
       const version=String(p.tag??"unknown").slice(0,90);
-      const text="Versión: "+version+"\nPublicada: "+String(p.date??"Fecha desconocida")+
+      const text="Versión: "+version+"\nTipo: "+(p.prerelease?"Prerelease":"Release")+(p.name?"\nNombre: "+String(p.name).slice(0,150):"")+"\nPublicada: "+String(p.date??"Fecha desconocida")+
         "\nEnlace oficial: "+String(p.url??"")+"\n\nChangelog oficial:\n"+String(p.body??"Sin notas publicadas");
       await createReport(db,discord,destination,"RELEASE / "+version,text.slice(0,1500),null,
         "github_release:"+String(p.repo)+":"+String(p.releaseId));

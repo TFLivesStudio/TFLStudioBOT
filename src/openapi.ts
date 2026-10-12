@@ -18,7 +18,7 @@ const schemas={
   Schedule:object({runAt:date,confirm:{type:"boolean",const:true}},["runAt","confirm"]),
   Template:object({name:string(90),visual:{$ref:"#/components/schemas/Visual"}},["name","visual"]),
   GithubSource:object({repository:string(),department:string(),defaultBranch:string()},["repository","department"]),
-  GithubSettings:object({enabled:bool,pushEnabled:bool,releaseEnabled:bool,batchMinutes:integer},["enabled","pushEnabled","releaseEnabled","batchMinutes"]),
+  GithubSettings:object({enabled:bool,pushEnabled:bool,releaseEnabled:bool,batchMinutes:integer,defaultBranch:string(100),allowPrereleases:bool},["enabled","pushEnabled","releaseEnabled","batchMinutes"]),
   StaffAssignment:object({userId:id,department:string()},["userId","department"]),
   BillingSubscription:object({label:string(160),provider:string(120),amountMinor:integer,currency:string(3),cadenceMonths:integer,nextDueAt:date,notes:string(1000)},["label","provider","amountMinor","currency","cadenceMonths","nextDueAt"]),
   BillingSubscriptionUpdate:object({status:{type:"string",enum:["active","paused","cancelled"]},nextDueAt:date},["status","nextDueAt"]),
@@ -51,7 +51,7 @@ const endpointList:[string,string[]][]=[
   ["/api/v1/billing/subscriptions",["get","post"]],["/api/v1/billing/subscriptions/{id}",["patch"]],
   ["/api/v1/announcements",["get","post"]],["/api/v1/announcements/{id}/schedule",["post"]],
   ["/api/v1/announcements/{id}/preview",["get"]],["/api/v1/announcements/templates",["get","post"]],
-  ["/api/v1/github/sources",["get","post"]],["/api/v1/github/sources/{id}",["patch"]],
+  ["/api/v1/github/sources",["get","post"]],["/api/v1/github/sources/{id}",["patch"]],["/api/v1/github/sources/{id}/sync",["post"]],
   ["/api/v1/jobs",["get"]],["/api/v1/audit",["get"]],["/api/v1/stats",["get"]],
   ["/api/v1/integrations/github/webhook",["post"]]
 ];
