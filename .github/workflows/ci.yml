@@ -27,8 +27,6 @@ jobs:
           node-version: "22"
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
       - name: Verify PostgreSQL migrations are idempotent
         run: npm run migrate && npm run migrate
         env:
@@ -44,3 +42,9 @@ jobs:
           FRONTEND_URL: http://localhost:3000
           CORS_ORIGIN: http://localhost:3000
           COOKIE_SECURE: 'false'
+      - name: Unit and PostgreSQL integration tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          TEST_DATABASE_URL: postgres://studio:studio_ci_only@127.0.0.1:5432/studio_test
+      - run: npm run build
