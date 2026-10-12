@@ -13,6 +13,7 @@ import { verifyGitHubSignature,handleGithubEvent } from "./github.js";
 import { OPENAPI } from "./openapi.js";
 import { visualSchema } from "./presentation.js";
 import { transaction } from "./db.js";
+import { getStaffMember } from "./staff.js";
 import { canUseChannel,visibleDepartments } from "./permissions.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
@@ -91,6 +92,12 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     await audit(db,"publication.create",actor.userId,"publication",saved.rows[0]!.id);
     return {id:saved.rows[0]!.id};
   });
+
+  app.get("/api/v1/publications/stats",async(req)=>{
+    await requireUser(req,db,config,{department:"publicidad"});
+    const rows=await db.query("SELECT platform,count(*)::int AS total FROM publication_records GROUP BY platform ORDER BY total DESC");
+    return {items:rows.rows,basis:"self_reported_records",completeFor:"stored_publications_only"};
+  });
   app.get("/api/v1/guides",async(req)=>{
     const actor=await requireUser(req,db,config);
     const q=query(page,req.query);
@@ -104,6 +111,41 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     const saved=await db.query<{id:string}>("INSERT INTO guides(category,title,body,visibility_department,discord_thread_id,updated_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",[d.category,d.title,d.body,d.visibilityDepartment,d.discordThreadId,actor.userId]);
     await audit(db,"guide.create",actor.userId,"guide",saved.rows[0]!.id);
     return {id:saved.rows[0]!.id};
+  });
+
+  app.get("/api/v1/reports/:id",async(req)=>{
+    const actor=await requireUser(req,db,config);
+    const id=query(z.object({id:idSchema}),req.params).id;
+    const item=await db.query<{department:DepartmentKey}>("SELECT * FROM reports WHERE id=$1",[id]);
+    const record=item.rows[0];
+    if(!record)throw Object.assign(new Error("Report not found"),{statusCode:404});
+    if(!await canUseChannel(config,actor,record.department,"read"))throw Object.assign(new Error("Forbidden"),{statusCode:403});
+    return {item:record};
+  });
+  app.get("/api/v1/guides/:id/revisions",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    const id=query(z.object({id:idSchema}),req.params).id;
+    return {items:(await db.query("SELECT version,title,body,category,visibility_department,edited_by,edited_at FROM guide_revisions WHERE guide_id=$1 ORDER BY version DESC",[id])).rows};
+  });
+  app.get("/api/v1/staff/members/:id",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    const id=query(z.object({id:z.string().regex(/^\d{17,20}$/)}),req.params).id;
+    const member=await getStaffMember(config,id);
+    if(!member)throw Object.assign(new Error("Member not found"),{statusCode:404});
+    return {item:member};
+  });
+  app.get("/api/v1/staff/directory",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    const rows=await db.query<{user_id:string;department:string;assigned_at:Date}>(
+      "SELECT user_id,department,assigned_at FROM staff_assignments ORDER BY assigned_at DESC LIMIT 100"
+    );
+    const unique=[...new Set(rows.rows.map(row=>row.user_id))];
+    const members=[];
+    for (const id of unique) {
+      const member=await getStaffMember(config,id);
+      members.push({id,member,assignments:rows.rows.filter(row=>row.user_id===id).map(row=>row.department)});
+    }
+    return {items:members,complete:false,scope:"recorded_assignments_only",memberTotal:members.length};
   });
   app.get("/api/v1/staff/assignments",async(req)=>{
     await requireUser(req,db,config,{admin:true});
@@ -127,6 +169,30 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     const saved=await db.query<{id:string}>("INSERT INTO billing_records(label,amount_minor,currency,category,due_at,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",[d.label,d.amountMinor,d.currency,d.category,d.dueAt,actor.userId]);
     await audit(db,"billing.create",actor.userId,"billing",saved.rows[0]!.id);
     return {id:saved.rows[0]!.id};
+  });
+
+  app.get("/api/v1/billing/subscriptions",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    const q=query(page,req.query);
+    return {items:(await db.query("SELECT * FROM billing_subscriptions ORDER BY next_due_at ASC LIMIT $1 OFFSET $2",[q.limit,q.offset])).rows,...q};
+  });
+  app.post("/api/v1/billing/subscriptions",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const d=query(z.object({label:text.max(160),provider:text.max(120),amountMinor:z.number().int().safe(),currency:z.string().regex(/^[A-Z]{3}$/),cadenceMonths:z.number().int().min(1).max(120),nextDueAt:z.string().datetime(),notes:z.string().max(1000).default("")}),req.body);
+    const result=await db.query<{id:string}>(
+      "INSERT INTO billing_subscriptions(label,provider,amount_minor,currency,cadence_months,next_due_at,notes,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id",
+      [d.label,d.provider,d.amountMinor,d.currency,d.cadenceMonths,d.nextDueAt,d.notes,actor.userId]);
+    await audit(db,"billing.subscription.create",actor.userId,"billing_subscription",result.rows[0]!.id);
+    return {id:result.rows[0]!.id};
+  });
+  app.patch("/api/v1/billing/subscriptions/:id",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const id=query(z.object({id:idSchema}),req.params).id;
+    const d=query(z.object({status:z.enum(["active","paused","cancelled"]),nextDueAt:z.string().datetime()}),req.body);
+    const result=await db.query("UPDATE billing_subscriptions SET status=$2,next_due_at=$3,updated_by=$4,updated_at=now() WHERE id=$1 RETURNING id",[id,d.status,d.nextDueAt,actor.userId]);
+    if(!result.rowCount)throw Object.assign(new Error("Subscription not found"),{statusCode:404});
+    await audit(db,"billing.subscription.update",actor.userId,"billing_subscription",String(id),{status:d.status,nextDueAt:d.nextDueAt});
+    return {ok:true};
   });
   app.get("/api/v1/announcements",async(req)=>{
     await requireUser(req,db,config,{admin:true});

@@ -20,6 +20,8 @@ const schemas={
   GithubSource:object({repository:string(),department:string(),defaultBranch:string()},["repository","department"]),
   GithubSettings:object({enabled:bool,pushEnabled:bool,releaseEnabled:bool,batchMinutes:integer},["enabled","pushEnabled","releaseEnabled","batchMinutes"]),
   StaffAssignment:object({userId:id,department:string()},["userId","department"]),
+  BillingSubscription:object({label:string(160),provider:string(120),amountMinor:integer,currency:string(3),cadenceMonths:integer,nextDueAt:date,notes:string(1000)},["label","provider","amountMinor","currency","cadenceMonths","nextDueAt"]),
+  BillingSubscriptionUpdate:object({status:{type:"string",enum:["active","paused","cancelled"]},nextDueAt:date},["status","nextDueAt"]),
   Billing:object({label:string(160),amountMinor:integer,currency:string(3),category:string(100),dueAt:{anyOf:[date,{type:"null"}]}},["label","amountMinor","currency","category"])
 };
 const input:Record<string,string>={
@@ -29,6 +31,8 @@ const input:Record<string,string>={
  "PATCH /api/v1/guides/{id}":"GuideUpdate",
  "PUT /api/v1/staff/assignments":"StaffAssignment",
  "POST /api/v1/billing":"Billing",
+ "POST /api/v1/billing/subscriptions":"BillingSubscription",
+ "PATCH /api/v1/billing/subscriptions/{id}":"BillingSubscriptionUpdate",
  "POST /api/v1/announcements":"Announcement",
  "POST /api/v1/announcements/{id}/schedule":"Schedule",
  "POST /api/v1/announcements/templates":"Template",
@@ -39,10 +43,12 @@ const endpointList:[string,string[]][]=[
   ["/api/v1/health/live",["get"]],["/api/v1/health/ready",["get"]],
   ["/api/v1/auth/login",["get"]],["/api/v1/auth/callback",["get"]],
   ["/api/v1/auth/me",["get"]],["/api/v1/auth/logout",["post"]],
-  ["/api/v1/departments",["get"]],["/api/v1/reports",["get","post"]],
-  ["/api/v1/publications",["get","post"]],["/api/v1/guides",["get","post"]],
+  ["/api/v1/departments",["get"]],["/api/v1/reports",["get","post"]],["/api/v1/reports/{id}",["get"]],
+  ["/api/v1/publications",["get","post"]],["/api/v1/publications/stats",["get"]],["/api/v1/guides",["get","post"]],
+  ["/api/v1/guides/{id}/revisions",["get"]],
   ["/api/v1/guides/{id}",["patch"]],
-  ["/api/v1/staff/assignments",["get","put"]],["/api/v1/billing",["get","post"]],
+  ["/api/v1/staff/assignments",["get","put"]],["/api/v1/staff/directory",["get"]],["/api/v1/staff/members/{id}",["get"]],["/api/v1/billing",["get","post"]],
+  ["/api/v1/billing/subscriptions",["get","post"]],["/api/v1/billing/subscriptions/{id}",["patch"]],
   ["/api/v1/announcements",["get","post"]],["/api/v1/announcements/{id}/schedule",["post"]],
   ["/api/v1/announcements/{id}/preview",["get"]],["/api/v1/announcements/templates",["get","post"]],
   ["/api/v1/github/sources",["get","post"]],["/api/v1/github/sources/{id}",["patch"]],
@@ -53,7 +59,7 @@ const unauthenticated=new Set(["/api/v1/health/live","/api/v1/health/ready","/ap
 const operation=(path:string,method:string)=>{
   const key=method.toUpperCase()+" "+path;
   const schemaName=input[key];
-  const params=path.includes("{id}")?[{in:"path",name:"id",required:true,schema:{type:"integer",minimum:1}}]:[];
+  const params=path.includes("{id}")?[{in:"path",name:"id",required:true,schema:path.includes("members")?id:{type:"integer",minimum:1}}]:[];
   return {
     operationId:method+path.replaceAll(/[^a-z0-9]+/gi,"_"),
     summary:key, ...(unauthenticated.has(path)?{security:[]}:{security:[{session:[]}]}),

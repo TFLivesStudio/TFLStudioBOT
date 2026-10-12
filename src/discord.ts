@@ -10,6 +10,18 @@ export function buildDiscord(config: Config, db: DB): Client {
   client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand() || interaction.guildId !== config.DISCORD_GUILD_ID) return;
     try {
+      if (interaction.commandName === "inicio") {
+        const member=await interaction.guild?.members.fetch(interaction.user.id);
+        if (!member || member.pending) {
+          await interaction.reply({content:"Tu incorporación aún requiere completar la aprobación humana en Discord.",ephemeral:true});
+          return;
+        }
+        await interaction.reply({
+          content:"**TFL STUDIO / BIENVENIDA**\nConsulta <#1559241799271194625> para conocer las normas y <#1525142989494812793> para encontrar las guías internas. El acceso a las áreas depende de los roles autorizados por ADMIN.",
+          ephemeral:true,allowedMentions:{parse:[]}
+        });
+        return;
+      }
       if (interaction.commandName === "recopilar") {
         await interaction.deferReply({ephemeral:true});
         const member=await interaction.guild?.members.fetch(interaction.user.id);
@@ -50,6 +62,7 @@ export async function registerCommands(config: Config): Promise<void> {
   const commands = [
     new SlashCommandBuilder().setName("estado-bot").setDescription("Diagnóstico básico de TFL Studio Core"),
     new SlashCommandBuilder().setName("recopilar").setDescription("Exporta el inventario estructural (ADMIN)"),
+    new SlashCommandBuilder().setName("inicio").setDescription("Orientación de bienvenida tras la aprobación humana"),
     new SlashCommandBuilder().setName("reporte").setDescription("Publica un registro operativo en tu departamento")
       .addStringOption(o => o.setName("departamento").setDescription("Departamento destino").setRequired(true).addChoices(...choices))
       .addStringOption(o => o.setName("titulo").setDescription("Título del reporte").setMinLength(3).setMaxLength(100).setRequired(true))
