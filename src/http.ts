@@ -33,7 +33,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   app.setErrorHandler((error,req,reply)=>{
     const status= error instanceof z.ZodError?400: ((error as {statusCode?:number}).statusCode ?? 500);
     if(status>=500) req.log.error({err:error}, "request_failed");
-    reply.code(status).send({error:{code:status===401?"UNAUTHENTICATED":status===403?"FORBIDDEN":status===400?"INVALID_REQUEST":"INTERNAL_ERROR",message:status>=500?"Internal server error":error.message}});
+    reply.code(status).send({error:{code:status===401?"UNAUTHENTICATED":status===403?"FORBIDDEN":status===400?"INVALID_REQUEST":"INTERNAL_ERROR",message:status>=500?"Internal server error":(error instanceof Error?error.message:"Invalid request")}});
   });
   app.get("/api/v1/health/live",async()=>({status:"ok"}));
   app.get("/api/v1/health/ready",async(req,reply)=>{
