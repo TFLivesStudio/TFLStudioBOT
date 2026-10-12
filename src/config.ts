@@ -19,6 +19,7 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32),
   GITHUB_WEBHOOK_SECRET: z.string().min(16).optional(),
   GITHUB_TOKEN: z.string().optional(),
+  INDEX_MESSAGE_CONTENT_INTENT: z.enum(["true","false"]).default("false").transform(v=>v==="true"),
   GITHUB_POLL_ENABLED: z.enum(["true", "false"]).default("false").transform(v => v === "true"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info")
 });

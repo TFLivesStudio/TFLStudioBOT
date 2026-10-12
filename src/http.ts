@@ -16,6 +16,7 @@ import { transaction } from "./db.js";
 import { getStaffMember } from "./staff.js";
 import { canUseChannel,visibleDepartments } from "./permissions.js";
 import { registerJobAdmin } from "./job-admin.js";
+import { registerIndexRoutes } from "./index-routes.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -277,6 +278,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     return {ok:true};
   });
   await registerJobAdmin(app,db,config,discord);
+  await registerIndexRoutes(app,db,config);
   app.get("/api/v1/audit",async(req)=>{
     await requireUser(req,db,config,{admin:true});
     const q=query(page,req.query);

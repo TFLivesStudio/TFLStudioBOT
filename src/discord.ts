@@ -5,9 +5,11 @@ import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { createReport } from "./reports.js";
 import { collectStructure } from "./auditor.js";
 import { canUseChannel } from "./permissions.js";
+import { attachReportEvents } from "./report-index.js";
 export function buildDiscord(config: Config, db: DB): Client {
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({ intents: [GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,...(config.INDEX_MESSAGE_CONTENT_INTENT?[GatewayIntentBits.MessageContent]:[])] });
   client.on("error", error => console.error("discord_client_error", error));
+  attachReportEvents(client,db,config);
   client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand() || interaction.guildId !== config.DISCORD_GUILD_ID) return;
     try {

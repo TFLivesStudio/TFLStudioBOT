@@ -6,6 +6,7 @@ import type { Config } from "./config.js";
 import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { postAnnouncement } from "./presentation.js";
 import { postToDestination } from "./discord.js";
+import { runImportBatch } from "./report-import.js";
 
 type Job = {id:string;kind:string;payload:Record<string,unknown>;attempts:number};
 const safeMessage=(e:unknown) => e instanceof Error ? e.name.slice(0,40)+": "+e.message.slice(0,250) : "Unknown error";
@@ -13,7 +14,7 @@ async function completeAttempt(db:DB,job:Job,outcome:string,error?:string):Promi
   await db.query("UPDATE job_attempts SET ended_at=now(),outcome=$3,safe_error=$4 WHERE job_id=$1 AND attempt=$2",[job.id,job.attempts,outcome,error??null]);
 }
 /** A claim is atomic; external I/O is never performed while holding a database transaction. */
-export async function runOneJob(db:DB,discord:Client):Promise<boolean>{
+export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boolean>{
   const result=await db.query<Job>(
     "UPDATE automation_jobs SET status='running',attempts=attempts+1,locked_at=now(),updated_at=now() WHERE id=(SELECT id FROM automation_jobs WHERE status='queued' AND run_at<=now() ORDER BY run_at,id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING id,kind,payload,attempts"
   );
@@ -39,7 +40,13 @@ export async function runOneJob(db:DB,discord:Client):Promise<boolean>{
       if(!(sourceRow.department in DEPARTMENTS))throw new Error("Destination not configured");
       destination=sourceRow.department as DepartmentKey;
     }
-    if(job.kind==="report_publish"){
+    if(job.kind==="history_import"){
+      if(!config)throw new Error("Import worker requires configuration");
+      const id=String(job.payload.runId);
+      await db.query("UPDATE report_import_runs SET status='running' WHERE id=$1 AND status='queued'",[id]);
+      const next=await runImportBatch(db,config,id);
+      if(next==="more")await db.query("INSERT INTO automation_jobs(kind,payload,origin) VALUES('history_import',$1,'admin')",[JSON.stringify({runId:id})]);
+    }else if(job.kind==="report_publish"){
       const id=String(job.payload.reportId??"");
       const rows=await db.query<{department:DepartmentKey;discord_channel_id:string;title:string;description:string;tags:string[];discord_message_id:string|null;publication_status:string}>(
         "SELECT department,discord_channel_id,title,description,tags,discord_message_id,publication_status FROM reports WHERE id=$1",[id]);
@@ -116,7 +123,7 @@ export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
   const loop=async()=>{
     if(closing||processing||!discord.isReady())return;
     processing=true;
-    try{for(let i=0;i<10&&!closing;i++)if(!await runOneJob(db,discord))break;}
+    try{for(let i=0;i<10&&!closing;i++)if(!await runOneJob(db,discord,config))break;}
     catch(e){console.error("worker_failed",safeMessage(e));}
     finally{processing=false;}
   };
