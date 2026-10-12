@@ -21,7 +21,7 @@ Node.js LTS (22.12+), TypeScript estricto, discord.js 14, Fastify 5, PostgreSQL 
 
 1. Crear una aplicación Discord **de pruebas**, con su token y OAuth2 callback `http://localhost:8080/api/v1/auth/callback`. El Guild configurado está restringido al Studio real; **no ejecutar comandos/escrituras en producción sin autorización**.
 2. `cp .env.example .env` y configurar credenciales **nuevas** (el token del Auditor anterior se considera comprometido).
-3. Crear base de datos PostgreSQL, luego `npm ci` cuando exista lockfile verificado, o `npm install` para la primera instalación.
+3. Crear base de datos PostgreSQL, luego `npm ci` (dependencias fijadas en `package-lock.json`).
 4. `npm run migrate`, `npm run build`, `npm test`, `npm start`.
 5. API: `GET /api/v1/health/live`, `GET /api/v1/health/ready`, `GET /api/v1/openapi.json`.
 
@@ -63,4 +63,4 @@ Consulta [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) y [docs/DEPLOY.md](doc
 
 ## Estado de verificación
 
-La sesión de creación no dispone de dependencias npm descargables ni de una conexión local al repositorio a través de Git; build/CI e integraciones de producción **no se declaran verificados**. El código fue escrito directamente mediante la integración autenticada de GitHub.
+GitHub Actions ha ejecutado correctamente instalación de dependencias, comprobación TypeScript, pruebas unitarias actuales y compilación. **No** se han ejecutado pruebas reales sobre el Discord privado ni migraciones sobre PostgreSQL de producción. El código se ha desarrollado directamente con el conector autenticado de GitHub.

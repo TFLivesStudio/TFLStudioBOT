@@ -5,7 +5,7 @@
 1. Crear PostgreSQL y usuario con permisos mínimos; respaldos probados.
 2. Rotar token del Auditor y crear credenciales nuevas de bot / OAuth. Registrar redirect URI exacta.
 3. Configurar `.env` en FeatherPanel, jamás dentro de Git. HTTPS detrás de reverse proxy con `HOST=127.0.0.1` cuando proxy y API comparten host.
-4. Instalar Node.js LTS mantenida compatible. `npm install` y generar lockfile verificando dependencias.
+4. Instalar Node.js LTS mantenida compatible. `npm ci` usando `package-lock.json` versionado.
 5. Ejecutar `npm run migrate`, `npm run build`, `npm test` en entorno controlado.
 6. Ejecutar `node dist/index.js`. Comprobar salud y gateway. El registro automático de comandos se ejecuta en arranque.
 7. Autorizar un webhook firmado GitHub en API HTTPS y habilitar fuentes por API ADMIN, **solo tras probar destino y etiquetas**.

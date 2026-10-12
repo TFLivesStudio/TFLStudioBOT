@@ -11,4 +11,7 @@
 - Partial structural /recopilar exports, effective channel permission checks.
 - GitHub commit fallback polling with first-run cursor, editable announcement visual payloads and versioned guide updates.
 
+- Dependency tree pinned in package-lock.json; CI installs with npm ci.
+- Post-approval /inicio, restricted staff directory, billing subscriptions and marketing stats.
+
 **Status:** development implementation, not verified in real production or claimed to be V1 complete.

@@ -2,6 +2,8 @@
 
 ## Alcance de la primera entrega
 
+**CI (GitHub Actions) verificada:** TypeScript, pruebas unitarias incluidas y build en verde. No equivale a pruebas contra Discord real, webhook real ni PostgreSQL de producción.
+
 **Operativo a nivel de implementación:** arranque, configuración, esquema transaccional, OAuth, roles vivos, API para datos administrativos, publicación por canal/foro, jobs, GitHub firmado, registro de cambios. Las integraciones reales no han sido ejecutadas.
 
 **Pendiente:** importación/indexación de publicaciones históricas, editor visual de embeds y componentes avanzados, plantillas reutilizables, ediciones versionadas de guías, dashboard, pruebas de integración contra Discord/GitHub, métricas completas, observabilidad extendida.
