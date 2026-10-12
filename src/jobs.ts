@@ -4,7 +4,7 @@ import { createReport } from "./reports.js";
 import { audit } from "./audit.js";
 import { fetchGithubRepository,pollGithubCommits } from "./github.js";
 import type { Config } from "./config.js";
-import type { DepartmentKey } from "./ids.js";
+import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { postAnnouncement } from "./presentation.js";
 
 type Job = {id:string;kind:string;payload:any;attempts:number};
@@ -18,18 +18,21 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
     if (job.kind==="github_push_summary") {
       await db.query("UPDATE automation_jobs SET dedup_key=NULL WHERE id=$1",[job.id]);
     }
+    let targetDepartment:DepartmentKey="client";
     if (job.kind.startsWith("github_")) {
       const repository=String(job.payload.repo??"");
-      const source=await db.query<{enabled:boolean}>("SELECT enabled FROM github_sources WHERE repository=$1",[repository]);
+      const source=await db.query<{enabled:boolean;department:string}>("SELECT enabled,department FROM github_sources WHERE repository=$1",[repository]);
       if (!source.rows[0]?.enabled) {
         await db.query("UPDATE automation_jobs SET status='failed',last_error='Source disabled' WHERE id=$1",[job.id]);
         return true;
       }
+      if (!(source.rows[0].department in DEPARTMENTS)) throw new Error("Unconfigured report destination");
+      targetDepartment=source.rows[0].department as DepartmentKey;
     }
     if(job.kind === "github_release") {
       const p=job.payload as {repo:string;releaseId:number;tag:string;name?:string;body:string;url:string;date?:string};
       const details = "Versión: "+p.tag+"\nPublicada: "+(p.date ?? "Fecha no indicada")+"\n"+p.url+"\n\nChangelog oficial:\n"+(p.body || "Sin notas publicadas");
-      await createReport(db,discord,"client","RELEASE / "+p.tag,details.slice(0,1500),null,"github_release:"+p.repo+":"+p.releaseId);
+      await createReport(db,discord,targetDepartment,"RELEASE / "+p.tag,details.slice(0,1500),null,"github_release:"+p.repo+":"+p.releaseId);
     } else if(job.kind === "github_push_summary") {
       const p=job.payload as {repo:string};
       const rows=await db.query<{sha:string;author:string;title:string;url:string}>(
@@ -37,7 +40,7 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
       if (rows.rows.length) {
         const lines=rows.rows.map(r => "- "+r.title.slice(0,120)+" — "+r.author.slice(0,60)+"\n  "+r.url);
         const stamp=rows.rows.map(r=>r.sha).join(",");
-        await createReport(db,discord,"client","DESARROLLO / "+rows.rows.length+" commits",lines.join("\n").slice(0,1500),null,"github_push:"+p.repo+":"+stamp);
+        await createReport(db,discord,targetDepartment,"DESARROLLO / "+rows.rows.length+" commits",lines.join("\n").slice(0,1500),null,"github_push:"+p.repo+":"+stamp);
         await db.query("UPDATE github_commits SET reported_at=now() WHERE repository=$1 AND sha=ANY($2::text[])",[p.repo,rows.rows.map(r=>r.sha)]);
         const more=await db.query("SELECT 1 FROM github_commits WHERE repository=$1 AND reported_at IS NULL LIMIT 1",[p.repo]);
         if (more.rowCount) await db.query("INSERT INTO automation_jobs(kind,payload,run_at,dedup_key) VALUES('github_push_summary',$1,now()+interval '1 minute',$2) ON CONFLICT(dedup_key) DO NOTHING",[JSON.stringify({repo:p.repo}),"push:backlog:"+p.repo+":"+job.id]);
