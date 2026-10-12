@@ -11,15 +11,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --no-audit --no-fund
-      - name: Export generated lockfile for versioning
-        run: |
-          python3 - <<'PY'
-          import base64
-          contents = base64.b64encode(open("package-lock.json","rb").read()).decode()
-          for i in range(0,len(contents),1800):
-              print("TFL_LOCK_PART_"+str(i//1800)+":"+contents[i:i+1800])
-          PY
+      - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
