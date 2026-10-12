@@ -8,25 +8,25 @@
 
 ## Política de migración
 
-Migraciones en \`migrations/\`, aplicadas transaccionalmente por \`npm run migrate\`. Mantener backups del PostgreSQL y una reversión supervisada para futuros cambios. No ejecutar migraciones sobre producción sin backup.
+Migraciones en `migrations/`, aplicadas transaccionalmente por `npm run migrate`. Mantener backups del PostgreSQL y una reversión supervisada para futuros cambios. No ejecutar migraciones sobre producción sin backup.
 
 ## Autorización
 
-\`ADMIN\` = \`1282541815802892289\`. Ámbitos no administrativos vinculados a roles reales (Minecraft, Websites, Hosting, Publicidad, etc.); la asignación interna en BD **no concede** un rol de Discord. El proceso nativo de aprobación humana es externo y se conserva.
+`ADMIN` = `1282541815802892289`. Ámbitos no administrativos vinculados a roles reales (Minecraft, Websites, Hosting, Publicidad, etc.); la asignación interna en BD **no concede** un rol de Discord. El proceso nativo de aprobación humana es externo y se conserva.
 
 ## Datos y privacidad
 
-Tablas: \`sessions\`, \`audit_events\`, \`reports\`, \`publication_records\`, \`guides\`, \`announcements\`, \`staff_assignments\`, \`billing_records\`, \`github_sources\`, \`github_commits\`, \`webhook_deliveries\`, \`automation_jobs\`. Respaldos, retención de eventos, derecho de eliminación y políticas de acceso deben definirse antes del tratamiento de datos reales.
+Tablas: `sessions`, `audit_events`, `reports`, `publication_records`, `guides`, `announcements`, `staff_assignments`, `billing_records`, `github_sources`, `github_commits`, `webhook_deliveries`, `automation_jobs`. Respaldos, retención de eventos, derecho de eliminación y políticas de acceso deben definirse antes del tratamiento de datos reales.
 
 ## Publicación GitHub
 
-\`github_push_summary\`: ventana configurable, máximo 25 commits por reporte, evita generar un mensaje por commit. \`github_release\`: evento independiente, publicación al siguiente ciclo de workers. Los jobs interrumpidos y fallos en publicaciones pueden pasar a \`needs_reconciliation\` para evitar reintentos inseguros.
+`github_push_summary`: ventana configurable, máximo 25 commits por reporte, evita generar un mensaje por commit. `github_release`: evento independiente, publicación al siguiente ciclo de workers. Los jobs interrumpidos y fallos en publicaciones pueden pasar a `needs_reconciliation` para evitar reintentos inseguros.
 
 ## Deuda técnica explícita
 
 1. Reconciliación manual automatizable de mensajes Discord ante fallo parcial.
 2. Pruebas de combinaciones complejas de permisos en canales/foros y gestión de rate limits de autorización.
-3. Índice de histórico desde canales y foros y esquema de cobertura \`completo/parcial/desconocido\`.
+3. Índice de histórico desde canales y foros y esquema de cobertura `completo/parcial/desconocido`.
 4. Manejo de paginación de comparaciones GitHub de más de 100 commits y reintentos de polling.
 5. OpenAPI ampliado con request/response schemas y ejemplos.
 6. Pruebas con PostgreSQL/Discord simulados y validación de build/TypeScript.

@@ -6,10 +6,10 @@
 
 ## Principios invariables
 
-- Solo opera en Guild ID \`1264656310205415474\`; \`ADMIN\` es la única autoridad administrativa global.
+- Solo opera en Guild ID `1264656310205415474`; `ADMIN` es la única autoridad administrativa global.
 - No sustituye, acelera ni automatiza la aprobación humana de miembros.
 - No reestructura categorías/canales/roles. Respeta IDs de la auditoría del 12/10/2026.
-- Los roles departamentales solo habilitan funciones específicas; \`Studio\` no equivale a administración.
+- Los roles departamentales solo habilitan funciones específicas; `Studio` no equivale a administración.
 - Billing, asignaciones de personal, auditoría y fuentes GitHub solo para ADMIN.
 - No incluye dashboard: el frontend posterior consumirá la API con Discord OAuth2.
 
@@ -19,17 +19,17 @@ Node.js LTS (22.12+), TypeScript estricto, discord.js 14, Fastify 5, PostgreSQL 
 
 ## Inicio (local / entorno de pruebas)
 
-1. Crear una aplicación Discord **de pruebas**, con su token y OAuth2 callback \`http://localhost:8080/api/v1/auth/callback\`. El Guild configurado está restringido al Studio real; **no ejecutar comandos/escrituras en producción sin autorización**.
-2. \`cp .env.example .env\` y configurar credenciales **nuevas** (el token del Auditor anterior se considera comprometido).
-3. Crear base de datos PostgreSQL, luego \`npm ci\` cuando exista lockfile verificado, o \`npm install\` para la primera instalación.
-4. \`npm run migrate\`, \`npm run build\`, \`npm test\`, \`npm start\`.
-5. API: \`GET /api/v1/health/live\`, \`GET /api/v1/health/ready\`, \`GET /api/v1/openapi.json\`.
+1. Crear una aplicación Discord **de pruebas**, con su token y OAuth2 callback `http://localhost:8080/api/v1/auth/callback`. El Guild configurado está restringido al Studio real; **no ejecutar comandos/escrituras en producción sin autorización**.
+2. `cp .env.example .env` y configurar credenciales **nuevas** (el token del Auditor anterior se considera comprometido).
+3. Crear base de datos PostgreSQL, luego `npm ci` cuando exista lockfile verificado, o `npm install` para la primera instalación.
+4. `npm run migrate`, `npm run build`, `npm test`, `npm start`.
+5. API: `GET /api/v1/health/live`, `GET /api/v1/health/ready`, `GET /api/v1/openapi.json`.
 
 ## API, OAuth y frontend futuro
 
-Inicio sesión: \`GET /api/v1/auth/login\`. Discord redirige a \`/api/v1/auth/callback\` y el backend establece cookie de sesión HttpOnly con token aleatorio almacenado como hash. El frontend utiliza \`credentials: "include"\` y consulta \`GET /api/v1/auth/me\` para obtener perfil, ámbito y token CSRF temporal. En cada operación de escritura enviar \`X-CSRF-Token\` y \`Origin\` exacto, además de \`Idempotency-Key\` para publicar reportes. El backend comprueba la membresía real y los roles mediante la API REST de Discord **en cada petición**; el frontend nunca recibe el token del bot ni el de Discord OAuth.
+Inicio sesión: `GET /api/v1/auth/login`. Discord redirige a `/api/v1/auth/callback` y el backend establece cookie de sesión HttpOnly con token aleatorio almacenado como hash. El frontend utiliza `credentials: "include"` y consulta `GET /api/v1/auth/me` para obtener perfil, ámbito y token CSRF temporal. En cada operación de escritura enviar `X-CSRF-Token` y `Origin` exacto, además de `Idempotency-Key` para publicar reportes. El backend comprueba la membresía real y los roles mediante la API REST de Discord **en cada petición**; el frontend nunca recibe el token del bot ni el de Discord OAuth.
 
-En producción se requieren HTTPS, \`COOKIE_SECURE=true\` y configuración exacta \`CORS_ORIGIN\`. Las cookies cross-site requieren políticas de navegador compatibles; se recomienda usar un proxy bajo el mismo sitio organizacional para evitar bloqueos de cookies de terceros.
+En producción se requieren HTTPS, `COOKIE_SECURE=true` y configuración exacta `CORS_ORIGIN`. Las cookies cross-site requieren políticas de navegador compatibles; se recomienda usar un proxy bajo el mismo sitio organizacional para evitar bloqueos de cookies de terceros.
 
 ## Endpoints implementados (primera entrega)
 
@@ -45,7 +45,7 @@ Los reportes históricos de Discord **no se importan automáticamente**. Su inde
 
 ## GitHub
 
-El origen \`TFLivesStudio/TFLClient\` se inicializa **desactivado**. Configurar \`GITHUB_WEBHOOK_SECRET\` y webhook en \`POST /api/v1/integrations/github/webhook\`; activar con endpoint ADMIN. Commits de \`main\` se agrupan según \`batch_minutes\`; releases se encolan individualmente para publicación anticipada. El polling alternativo permite recuperar releases y commits nuevos desde la rama configurada; al habilitarlo por primera vez establece un cursor sin publicar todo el historial. \`GITHUB_TOKEN\` es recomendable por el límite de la API anónima. Comparaciones de más de 100 commits requieren paginación adicional y se detienen sin avanzar el cursor. Se registra un ID de entrega y claves únicas en PostgreSQL.
+El origen `TFLivesStudio/TFLClient` se inicializa **desactivado**. Configurar `GITHUB_WEBHOOK_SECRET` y webhook en `POST /api/v1/integrations/github/webhook`; activar con endpoint ADMIN. Commits de `main` se agrupan según `batch_minutes`; releases se encolan individualmente para publicación anticipada. El polling alternativo permite recuperar releases y commits nuevos desde la rama configurada; al habilitarlo por primera vez establece un cursor sin publicar todo el historial. `GITHUB_TOKEN` es recomendable por el límite de la API anónima. Comparaciones de más de 100 commits requieren paginación adicional y se detienen sin avanzar el cursor. Se registra un ID de entrega y claves únicas en PostgreSQL.
 
 **Etiquetas de foro:** los reportes manuales de Network usan UPDATE por defecto y TFL Web utiliza Desarrollo. La categorización exacta debe revisarse antes de activar el flujo.
 
@@ -55,7 +55,7 @@ El origen \`TFLivesStudio/TFLClient\` se inicializa **desactivado**. Configurar 
 
 - Mantener secretos solo en variables de entorno; no versionar tokens, dumps ni información de personal.
 - Sesiones Hash SHA-256, CSRF por sesión, verificación webhook HMAC-SHA256, CORS exacto, rate limit, consultas parametrizadas, comprobación de ámbito por área y permisos ADMIN.
-- \`/recopilar\` exporta un nuevo inventario estructural parcial JSON/Markdown. No se ha migrado el código original del Auditor ni equivale a su exportación completa.
+- `/recopilar` exporta un nuevo inventario estructural parcial JSON/Markdown. No se ha migrado el código original del Auditor ni equivale a su exportación completa.
 - Este árbol no es una restauración del bot Auditor antiguo. Es una aplicación nueva que preserva el destino y el modelo funcional del servidor.
 - Ningún componente publica ni despliega por el simple hecho de estar escrito en GitHub. La escritura ocurrirá **solo cuando se arranque el proceso con credenciales reales**.
 
