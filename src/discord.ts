@@ -4,6 +4,7 @@ import type { DB } from "./db.js";
 import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { createReport } from "./reports.js";
 import { collectStructure } from "./auditor.js";
+import { canUseChannel } from "./permissions.js";
 export function buildDiscord(config: Config, db: DB): Client {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   client.on("error", error => console.error("discord_client_error", error));
@@ -41,8 +42,10 @@ export function buildDiscord(config: Config, db: DB): Client {
         const key = interaction.options.getString("departamento", true) as DepartmentKey;
         const target = DEPARTMENTS[key];
         if (!target) { await interaction.editReply("Departamento desconocido."); return; }
-        const member=await interaction.guild?.members.fetch(interaction.user.id);
-        const allowed = member && !member.pending && (member.roles.cache.has(config.ADMIN_ROLE_ID) || member.roles.cache.has(target.role)) && member.permissionsIn(target.destination).has("ViewChannel") && member.permissionsIn(target.destination).has(target.kind==="forum"?"CreatePublicThreads":"SendMessages");
+        const member=await interaction.guild?.members.fetch({user:interaction.user.id,force:true});
+        const allowed = !!member && !member.pending && await canUseChannel(config,{
+          userId:interaction.user.id,roles:[...member.roles.cache.keys()],csrfHash:""
+        },key,"write");
         if (!allowed) { await interaction.editReply("No tienes autorización para publicar en este departamento."); return; }
         const title = interaction.options.getString("titulo", true);
         const description = interaction.options.getString("descripcion", true);

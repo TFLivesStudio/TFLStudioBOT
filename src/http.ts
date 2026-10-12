@@ -49,7 +49,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/auth/me",async(req)=>{
     const actor=await requireUser(req,db,config);
-    return {userId:actor.userId,admin:isAdmin(actor,config),departments:await visibleDepartments(config,actor),csrfToken:await refreshCsrf(db,req)};
+    return {userId:actor.userId,admin:isAdmin(actor,config),departments:await visibleDepartments(config,actor),csrfToken:refreshCsrf(db,req,config)};
   });
   app.post("/api/v1/auth/logout",async(req,reply)=>{
     await requireUser(req,db,config,{mutation:true});

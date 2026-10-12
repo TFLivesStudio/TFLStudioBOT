@@ -35,6 +35,7 @@ jobs:
           NODE_ENV: test
           DATABASE_URL: postgres://studio:studio_ci_only@127.0.0.1:5432/studio_test
           BOT_TOKEN: ci_FAKE_bot_token_for_local_tests_123456789
+          SESSION_SECRET: ci_nonproduction_testing_key_0123456789ABCDEF
           DISCORD_CLIENT_ID: '1559294093962510386'
           DISCORD_CLIENT_SECRET: ci_FAKE_client_secret_123456789
           DISCORD_GUILD_ID: '1264656310205415474'

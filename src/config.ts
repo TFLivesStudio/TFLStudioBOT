@@ -16,6 +16,7 @@ const schema = z.object({
   DISCORD_GUILD_ID: snowflake,
   ADMIN_ROLE_ID: snowflake,
   DATABASE_URL: z.string().min(10),
+  SESSION_SECRET: z.string().min(32),
   GITHUB_WEBHOOK_SECRET: z.string().min(16).optional(),
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_POLL_ENABLED: z.enum(["true", "false"]).default("false").transform(v => v === "true"),
