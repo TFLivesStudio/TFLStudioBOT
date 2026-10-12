@@ -50,7 +50,7 @@ export function buildDiscord(config: Config, db: DB): Client {
         const title = interaction.options.getString("titulo", true);
         const description = interaction.options.getString("descripcion", true);
         const record = await createReport(db, client, key, title, description, interaction.user.id, "discord:" + interaction.id);
-        await interaction.editReply("Reporte registrado: " + record.url);
+        await interaction.editReply(record.url ? "Reporte publicado: " + record.url : "Reporte ST-"+record.id+" registrado. Publicación en cola; puedes consultar su estado desde la API.");
       }
     } catch (e) {
       console.error("interaction_failed", e);
@@ -74,9 +74,9 @@ export async function registerCommands(config: Config): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.BOT_TOKEN);
   await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID), { body: commands.map(x => x.toJSON()) });
 }
-export async function postToDestination(client: Client, channelId: string, title: string, description: string, tagIds: string[] = []): Promise<{messageId: string; threadId: string | null; url: string}> {
+export async function postToDestination(client: Client, channelId: string, title: string, description: string, tagIds: string[] = [], reference = ""): Promise<{messageId: string; threadId: string | null; url: string}> {
   const channel = await client.channels.fetch(channelId);
-  const text = "**" + title.replaceAll("@", "@\u200b").slice(0, 100) + "**\n" + description.replaceAll("@", "@\u200b").slice(0, 1800);
+  const text = ("**" + title.replaceAll("@", "@\u200b").slice(0, 100) + "**\n" + description.replaceAll("@", "@\u200b").slice(0, 1750) + (reference ? "\n\nRef: " + reference : "")).slice(0, 1990);
   if (!channel) throw new Error("Destination channel not found: " + channelId);
   if (channel.type === ChannelType.GuildForum) {
     const available = new Set(channel.availableTags.map(tag => tag.id));

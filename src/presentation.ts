@@ -10,7 +10,7 @@ export const embedSchema=z.object({
 }).refine(e=>!!e.title||!!e.description,{message:"Embed needs a title or description"});
 export const visualSchema=z.object({embeds:z.array(embedSchema).max(3).default([])});
 export type VisualPayload=z.infer<typeof visualSchema>;
-export async function postAnnouncement(client:Client,channelId:string,title:string,body:string,payload:unknown):Promise<string>{
+export async function postAnnouncement(client:Client,channelId:string,title:string,body:string,payload:unknown,reference=""):Promise<string>{
   const visual=visualSchema.parse(payload);
   if(visual.embeds.reduce((n,e)=>n+(e.title?.length??0)+(e.description?.length??0)+(e.footer?.length??0)+e.fields.reduce((x,f)=>x+f.name.length+f.value.length,0),0)>5800) throw new Error("Discord embed total size exceeded");
   const channel=await client.channels.fetch(channelId);
@@ -24,7 +24,7 @@ export async function postAnnouncement(client:Client,channelId:string,title:stri
     return embed;
   });
   const result=await channel.send({
-    content:"**"+title.replaceAll("@","@\u200b")+"**\n"+body.replaceAll("@","@\u200b"),
+    content:("**"+title.replaceAll("@","@\u200b")+"**\n"+body.replaceAll("@","@\u200b")+(reference?"\n\nRef: "+reference:"")).slice(0,1990),
     embeds,
     allowedMentions:{parse:[]}
   });

@@ -15,6 +15,7 @@ import { visualSchema } from "./presentation.js";
 import { transaction } from "./db.js";
 import { getStaffMember } from "./staff.js";
 import { canUseChannel,visibleDepartments } from "./permissions.js";
+import { registerJobAdmin } from "./job-admin.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -275,11 +276,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     await audit(db,"github.configure",actor.userId,"github_source",String(id));
     return {ok:true};
   });
-  app.get("/api/v1/jobs",async(req)=>{
-    await requireUser(req,db,config,{admin:true});
-    const q=query(page,req.query);
-    return {items:(await db.query("SELECT id,kind,status,run_at,attempts,last_error,created_at FROM automation_jobs ORDER BY id DESC LIMIT $1 OFFSET $2",[q.limit,q.offset])).rows,...q};
-  });
+  await registerJobAdmin(app,db,config,discord);
   app.get("/api/v1/audit",async(req)=>{
     await requireUser(req,db,config,{admin:true});
     const q=query(page,req.query);
