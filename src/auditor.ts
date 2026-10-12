@@ -13,7 +13,8 @@ export async function collectStructure(client:Client,db:DB,actorId:string):Promi
     guild:{name:guild.name,memberCountEstimate:guild.memberCount},
     channels:channels.filter(c=>c!==null).map(c=>({
       id:c!.id,name:c!.name,type:c!.type,parentId:c!.parentId,
-      overwrites:c!.permissionOverwrites.cache.map(o=>({id:o.id,type:o.type,allow:o.allow.bitfield.toString(),deny:o.deny.bitfield.toString()}))
+      overwrites:c!.permissionOverwrites.cache.map(o=>({id:o.id,type:o.type,allow:o.allow.bitfield.toString(),deny:o.deny.bitfield.toString()})),
+      forumTags:c!.type===15?c!.availableTags.map(t=>({id:t.id,name:t.name})):[]
     })),
     roles:roles.map(r=>({id:r.id,name:r.name,position:r.position,permissions:r.permissions.bitfield.toString()}))
   };

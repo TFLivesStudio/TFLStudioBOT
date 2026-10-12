@@ -1,9 +1,11 @@
 import type { Client } from "discord.js";
 import type { DB } from "./db.js";
-import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
+import { DEPARTMENTS, NETWORK_TAGS, type DepartmentKey } from "./ids.js";
 import { postToDestination } from "./discord.js";
 export async function createReport(db: DB, client: Client, department: DepartmentKey, title: string, description: string, by: string | null, key: string, tags: string[] = []): Promise<{id: string; url: string}> {
   const target = DEPARTMENTS[department];
+  if (!tags.length && department==="network") tags=[NETWORK_TAGS.UPDATE];
+  if (!tags.length && department==="tflweb") tags=["1535421059707175123"];
   const pending = await db.query<{id:string;discord_message_id:string|null;discord_thread_id:string|null}>(
     "INSERT INTO reports(department,source,title,description,created_by,discord_channel_id,external_key) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(external_key) DO UPDATE SET external_key=EXCLUDED.external_key RETURNING id,discord_message_id,discord_thread_id",
     [department, by ? "manual" : "github", title, description, by, target.destination, key]

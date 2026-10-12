@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import type { DB } from "./db.js";
 import type { Client } from "discord.js";
 import { audit } from "./audit.js";
-import { beginOAuth,completeOAuth,identify,requireUser,refreshCsrf,logout,isAdmin,canAccess } from "./auth.js";
+import { beginOAuth,completeOAuth,requireUser,refreshCsrf,logout,isAdmin } from "./auth.js";
 import { DEPARTMENTS, IDS, type DepartmentKey } from "./ids.js";
 import { createReport } from "./reports.js";
 import { verifyGitHubSignature,handleGithubEvent } from "./github.js";
@@ -46,7 +46,8 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/auth/me",async(req)=>{
     const actor=await requireUser(req,db,config);
-    return {userId:actor.userId,admin:isAdmin(actor,config),departments:Object.keys(DEPARTMENTS).filter(d=>canAccess(actor,d as DepartmentKey,config)),csrfToken:await refreshCsrf(db,req)};
+    const checks=await Promise.all((Object.keys(DEPARTMENTS) as DepartmentKey[]).map(async d=>({d,allowed:await canUseChannel(config,actor,d,"read")})));
+    return {userId:actor.userId,admin:isAdmin(actor,config),departments:checks.filter(x=>x.allowed).map(x=>x.d),csrfToken:await refreshCsrf(db,req)};
   });
   app.post("/api/v1/auth/logout",async(req,reply)=>{
     await requireUser(req,db,config,{mutation:true});
@@ -191,7 +192,8 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
       if(!config.GITHUB_WEBHOOK_SECRET) return reply.code(503).send({error:"Webhook not configured"});
       const raw=req.body;
       if(!Buffer.isBuffer(raw)|| !verifyGitHubSignature(raw,req.headers["x-hub-signature-256"] as string | undefined,config.GITHUB_WEBHOOK_SECRET)) return reply.code(401).send({error:"Invalid signature"});
-      const payload=JSON.parse(raw.toString("utf8")) as unknown;
+      let payload:unknown;
+      try {payload=JSON.parse(raw.toString("utf8"));}catch{ return reply.code(400).send({error:"Invalid JSON"}); }
       const event=String(req.headers["x-github-event"]??"");
       const delivery=String(req.headers["x-github-delivery"]??"");
       return {result:await handleGithubEvent(db,event,delivery,payload)};

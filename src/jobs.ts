@@ -15,6 +15,14 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
   const job=claim.rows[0];
   if(!job) return false;
   try {
+    if (job.kind.startsWith("github_")) {
+      const repository=String(job.payload.repo??"");
+      const source=await db.query<{enabled:boolean}>("SELECT enabled FROM github_sources WHERE repository=$1",[repository]);
+      if (!source.rows[0]?.enabled) {
+        await db.query("UPDATE automation_jobs SET status='failed',last_error='Source disabled' WHERE id=$1",[job.id]);
+        return true;
+      }
+    }
     if(job.kind === "github_release") {
       const p=job.payload as {repo:string;releaseId:number;tag:string;name?:string;body:string;url:string;date?:string};
       const details = "Versión: "+p.tag+"\nPublicada: "+(p.date ?? "Fecha no indicada")+"\n"+p.url+"\n\nChangelog oficial:\n"+(p.body || "Sin notas publicadas");
@@ -28,6 +36,8 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
         const stamp=rows.rows.map(r=>r.sha).join(",");
         await createReport(db,discord,"client","DESARROLLO / "+rows.rows.length+" commits",lines.join("\n").slice(0,1500),null,"github_push:"+p.repo+":"+stamp);
         await db.query("UPDATE github_commits SET reported_at=now() WHERE repository=$1 AND sha=ANY($2::text[])",[p.repo,rows.rows.map(r=>r.sha)]);
+        const more=await db.query("SELECT 1 FROM github_commits WHERE repository=$1 AND reported_at IS NULL LIMIT 1",[p.repo]);
+        if (more.rowCount) await db.query("INSERT INTO automation_jobs(kind,payload,run_at,dedup_key) VALUES('github_push_summary',$1,now()+interval '1 minute',$2) ON CONFLICT(dedup_key) DO NOTHING",[JSON.stringify({repo:p.repo}),"push:backlog:"+p.repo+":"+job.id]);
       }
       // After this job has completed, a new push can schedule a fresh batch.
     } else if(job.kind === "announcement") {
@@ -41,7 +51,7 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
     } else {
       throw new Error("Unknown job kind: "+job.kind);
     }
-    await db.query("UPDATE automation_jobs SET status='done',last_error=NULL WHERE id=$1",[job.id]);
+    await db.query("UPDATE automation_jobs SET status='done',last_error=NULL,dedup_key=CASE WHEN kind='github_push_summary' THEN NULL ELSE dedup_key END WHERE id=$1",[job.id]);
   } catch(e) {
     const reason=e instanceof Error?e.message:String(e);
     // Publishing may succeed remotely then fail locally; leave the job for manual reconciliation.
