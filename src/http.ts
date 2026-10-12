@@ -13,7 +13,7 @@ import { verifyGitHubSignature,handleGithubEvent } from "./github.js";
 import { OPENAPI } from "./openapi.js";
 import { visualSchema } from "./presentation.js";
 import { transaction } from "./db.js";
-import { canUseChannel } from "./permissions.js";
+import { canUseChannel,visibleDepartments } from "./permissions.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -48,8 +48,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/auth/me",async(req)=>{
     const actor=await requireUser(req,db,config);
-    const checks=await Promise.all((Object.keys(DEPARTMENTS) as DepartmentKey[]).map(async d=>({d,allowed:await canUseChannel(config,actor,d,"read")})));
-    return {userId:actor.userId,admin:isAdmin(actor,config),departments:checks.filter(x=>x.allowed).map(x=>x.d),csrfToken:await refreshCsrf(db,req)};
+    return {userId:actor.userId,admin:isAdmin(actor,config),departments:await visibleDepartments(config,actor),csrfToken:await refreshCsrf(db,req)};
   });
   app.post("/api/v1/auth/logout",async(req,reply)=>{
     await requireUser(req,db,config,{mutation:true});
@@ -58,17 +57,15 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/departments",async(req)=>{
     const actor=await requireUser(req,db,config);
-    const choices=await Promise.all(Object.keys(DEPARTMENTS).map(async d=>({d,allow:await canUseChannel(config,actor,d as DepartmentKey,"read")})));
-    return {items:choices.filter(x=>x.allow).map(x=>x.d)};
+    return {items:await visibleDepartments(config,actor)};
   });
   app.get("/api/v1/reports",async(req)=>{
     const actor=await requireUser(req,db,config);
     const q=query(page.extend({department:departmentSchema.optional(),search:z.string().max(120).optional()}),req.query);
-    const choices=q.department?[q.department]:Object.keys(DEPARTMENTS) as DepartmentKey[];
-    const checks=await Promise.all(choices.map(async d=>({d,allow:await canUseChannel(config,actor,d,"read")})));
-    if(q.department && !checks[0]?.allow) throw Object.assign(new Error("Forbidden"),{statusCode:403});
-    const allowed=checks.filter(x=>x.allow).map(x=>x.d);
-    const result=await db.query("SELECT id,department,source,title,description,created_by,discord_channel_id,discord_message_id,discord_thread_id,created_at FROM reports WHERE department=ANY($1::text[]) AND ($2::text IS NULL OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%') ORDER BY created_at DESC LIMIT $3 OFFSET $4",[allowed,q.search??null,q.limit,q.offset]);
+    const allowed=await visibleDepartments(config,actor);
+    if(q.department && !allowed.includes(q.department)) throw Object.assign(new Error("Forbidden"),{statusCode:403});
+    const selected=q.department?[q.department]:allowed;
+    const result=await db.query("SELECT id,department,source,title,description,created_by,discord_channel_id,discord_message_id,discord_thread_id,created_at FROM reports WHERE department=ANY($1::text[]) AND ($2::text IS NULL OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%') ORDER BY created_at DESC LIMIT $3 OFFSET $4",[selected,q.search??null,q.limit,q.offset]);
     return {items:result.rows,limit:q.limit,offset:q.offset};
   });
   app.post("/api/v1/reports",async(req)=>{
@@ -97,8 +94,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   app.get("/api/v1/guides",async(req)=>{
     const actor=await requireUser(req,db,config);
     const q=query(page,req.query);
-    const checks=await Promise.all((Object.keys(DEPARTMENTS) as DepartmentKey[]).map(async d=>({d,allow:await canUseChannel(config,actor,d,"read")})));
-    const allowed=checks.filter(x=>x.allow).map(x=>x.d);
+    const allowed=await visibleDepartments(config,actor);
     const result=await db.query("SELECT * FROM guides WHERE visibility_department IS NULL OR visibility_department=ANY($1::text[]) ORDER BY updated_at DESC LIMIT $2 OFFSET $3",[allowed,q.limit,q.offset]);
     return {items:result.rows,...q};
   });
@@ -225,8 +221,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/stats",async(req)=>{
     const actor=await requireUser(req,db,config);
-    const checks=await Promise.all((Object.keys(DEPARTMENTS) as DepartmentKey[]).map(async d=>({d,allow:await canUseChannel(config,actor,d,"read")})));
-    const allowed=checks.filter(x=>x.allow).map(x=>x.d);
+    const allowed=await visibleDepartments(config,actor);
     const reports=await db.query("SELECT department,count(*)::int AS total FROM reports WHERE department=ANY($1::text[]) GROUP BY department",[allowed]);
     return {reports:reports.rows,source:"database",completeFor:"persisted_reports_only"};
   });

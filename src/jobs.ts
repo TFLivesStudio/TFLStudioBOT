@@ -15,6 +15,9 @@ export async function runOneJob(db: DB, discord: Client): Promise<boolean> {
   const job=claim.rows[0];
   if(!job) return false;
   try {
+    if (job.kind==="github_push_summary") {
+      await db.query("UPDATE automation_jobs SET dedup_key=NULL WHERE id=$1",[job.id]);
+    }
     if (job.kind.startsWith("github_")) {
       const repository=String(job.payload.repo??"");
       const source=await db.query<{enabled:boolean}>("SELECT enabled FROM github_sources WHERE repository=$1",[repository]);
