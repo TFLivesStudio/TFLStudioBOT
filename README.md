@@ -53,7 +53,7 @@ El origen \`TFLivesStudio/TFLClient\` se inicializa **desactivado**. Configurar 
 
 - Mantener secretos solo en variables de entorno; no versionar tokens, dumps ni información de personal.
 - Sesiones Hash SHA-256, CSRF por sesión, verificación webhook HMAC-SHA256, CORS exacto, rate limit, consultas parametrizadas, comprobación de ámbito por área y permisos ADMIN.
-- \`/recopilar\` del Auditor histórico aún requiere adaptación e integración; no se ha migrado su código original.
+- \`/recopilar\` exporta un nuevo inventario estructural parcial JSON/Markdown. No se ha migrado el código original del Auditor ni equivale a su exportación completa.
 - Este árbol no es una restauración del bot Auditor antiguo. Es una aplicación nueva que preserva el destino y el modelo funcional del servidor.
 - Ningún componente publica ni despliega por el simple hecho de estar escrito en GitHub. La escritura ocurrirá **solo cuando se arranque el proceso con credenciales reales**.
 

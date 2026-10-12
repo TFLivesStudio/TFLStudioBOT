@@ -2,7 +2,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { DB } from "./db.js";
 import type { Config } from "./config.js";
-import { DEPARTMENTS, IDS, type DepartmentKey } from "./ids.js";
+import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
+import { canUseChannel } from "./permissions.js";
 
 const digest = (s: string) => createHash("sha256").update(s).digest("hex");
 const random = () => randomBytes(32).toString("base64url");
@@ -16,7 +17,9 @@ export function setCookie(reply: FastifyReply, name: string, value: string, conf
   const options = [name + "=" + encodeURIComponent(value), "Path=/", "Max-Age=" + maxAge, "SameSite=" + (config.COOKIE_SECURE ? "None" : "Lax")];
   if (httpOnly) options.push("HttpOnly");
   if (config.COOKIE_SECURE) options.push("Secure");
-  reply.header("Set-Cookie", options.join("; "));
+  const previous=reply.getHeader("Set-Cookie");
+  const existing=Array.isArray(previous)?previous.map(String):previous?[String(previous)]:[];
+  reply.header("Set-Cookie", [...existing,options.join("; ")]);
 }
 export async function beginOAuth(reply: FastifyReply, config: Config): Promise<void> {
   const state = random();
@@ -70,7 +73,7 @@ export async function requireUser(req: FastifyRequest, db: DB, config: Config, o
   const identity = await identify(req,db,config);
   if (!identity) throw Object.assign(new Error("Unauthorized"), {statusCode:401});
   if (options.admin && !identity.roles.includes(config.ADMIN_ROLE_ID)) throw Object.assign(new Error("Forbidden"), {statusCode:403});
-  if (options.department && !canAccess(identity,options.department,config)) throw Object.assign(new Error("Forbidden"), {statusCode:403});
+  if (options.department && !await canUseChannel(config,identity,options.department,options.mutation?"write":"read")) throw Object.assign(new Error("Forbidden"), {statusCode:403});
   if (options.mutation) {
     const header = req.headers["x-csrf-token"];
     if (typeof header !== "string" || digest(header) !== identity.csrfHash) throw Object.assign(new Error("CSRF token required"), {statusCode:403});

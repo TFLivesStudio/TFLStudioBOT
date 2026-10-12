@@ -4,7 +4,7 @@
 
 **Operativo a nivel de implementación:** arranque, configuración, esquema transaccional, OAuth, roles vivos, API para datos administrativos, publicación por canal/foro, jobs, GitHub firmado, registro de cambios. Las integraciones reales no han sido ejecutadas.
 
-**Pendiente:** importación/indexación de publicaciones históricas, inventario \`/recopilar\`, validación efectiva de overwrites por canal, editor visual de embeds y componentes avanzados, plantillas reutilizables, ediciones versionadas de guías, dashboard, pruebas de integración contra Discord/GitHub, polling de commits para casos sin webhook, métricas completas, observabilidad extendida.
+**Pendiente:** importación/indexación de publicaciones históricas, editor visual de embeds y componentes avanzados, plantillas reutilizables, ediciones versionadas de guías, dashboard, pruebas de integración contra Discord/GitHub, polling de commits para casos sin webhook, métricas completas, observabilidad extendida.
 
 ## Política de migración
 
@@ -25,7 +25,7 @@ Tablas: \`sessions\`, \`audit_events\`, \`reports\`, \`publication_records\`, \`
 ## Deuda técnica explícita
 
 1. Reconciliación manual automatizable de mensajes Discord ante fallo parcial.
-2. Implementación completa de permisos efectivos por canal/foro, además de rol.
+2. Pruebas de combinaciones complejas de permisos en canales/foros y gestión de rate limits de autorización.
 3. Índice de histórico desde canales y foros y esquema de cobertura \`completo/parcial/desconocido\`.
 4. OpenAPI ampliado con request/response schemas y ejemplos.
 5. Pruebas con PostgreSQL/Discord simulados y validación de build/TypeScript.

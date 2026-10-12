@@ -11,6 +11,7 @@ import { DEPARTMENTS, IDS, type DepartmentKey } from "./ids.js";
 import { createReport } from "./reports.js";
 import { verifyGitHubSignature,handleGithubEvent } from "./github.js";
 import { OPENAPI } from "./openapi.js";
+import { canUseChannel } from "./permissions.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -54,20 +55,23 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/departments",async(req)=>{
     const actor=await requireUser(req,db,config);
-    return {items:Object.keys(DEPARTMENTS).filter(d=>canAccess(actor,d as DepartmentKey,config))};
+    const choices=await Promise.all(Object.keys(DEPARTMENTS).map(async d=>({d,allow:await canUseChannel(config,actor,d as DepartmentKey,"read")})));
+    return {items:choices.filter(x=>x.allow).map(x=>x.d)};
   });
   app.get("/api/v1/reports",async(req)=>{
     const actor=await requireUser(req,db,config);
     const q=query(page.extend({department:departmentSchema.optional(),search:z.string().max(120).optional()}),req.query);
-    const allowed=q.department?[q.department]:Object.keys(DEPARTMENTS).filter(d=>canAccess(actor,d as DepartmentKey,config));
-    if(allowed.some(d=>!canAccess(actor,d as DepartmentKey,config))) throw Object.assign(new Error("Forbidden"),{statusCode:403});
+    const choices=q.department?[q.department]:Object.keys(DEPARTMENTS) as DepartmentKey[];
+    const checks=await Promise.all(choices.map(async d=>({d,allow:await canUseChannel(config,actor,d,"read")})));
+    if(q.department && !checks[0]?.allow) throw Object.assign(new Error("Forbidden"),{statusCode:403});
+    const allowed=checks.filter(x=>x.allow).map(x=>x.d);
     const result=await db.query("SELECT id,department,source,title,description,created_by,discord_channel_id,discord_message_id,discord_thread_id,created_at FROM reports WHERE department=ANY($1::text[]) AND ($2::text IS NULL OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%') ORDER BY created_at DESC LIMIT $3 OFFSET $4",[allowed,q.search??null,q.limit,q.offset]);
     return {items:result.rows,limit:q.limit,offset:q.offset};
   });
   app.post("/api/v1/reports",async(req)=>{
     const actor=await requireUser(req,db,config,{mutation:true});
     const input=query(z.object({department:departmentSchema,title:text.max(100),description:text.max(1500)}),req.body);
-    if(!canAccess(actor,input.department,config)) throw Object.assign(new Error("Forbidden"),{statusCode:403});
+    if(!await canUseChannel(config,actor,input.department,"write")) throw Object.assign(new Error("Forbidden"),{statusCode:403});
     const key=req.headers["idempotency-key"];
     if(typeof key!=="string" || !/^[\w-]{8,128}$/.test(key)) throw Object.assign(new Error("Idempotency-Key header required"),{statusCode:400});
     const result=await createReport(db,discord,input.department,input.title,input.description,actor.userId,"api:"+actor.userId+":"+key);
@@ -90,7 +94,8 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   app.get("/api/v1/guides",async(req)=>{
     const actor=await requireUser(req,db,config);
     const q=query(page,req.query);
-    const allowed=Object.keys(DEPARTMENTS).filter(d=>canAccess(actor,d as DepartmentKey,config));
+    const checks=await Promise.all((Object.keys(DEPARTMENTS) as DepartmentKey[]).map(async d=>({d,allow:await canUseChannel(config,actor,d,"read")})));
+    const allowed=checks.filter(x=>x.allow).map(x=>x.d);
     const result=await db.query("SELECT * FROM guides WHERE visibility_department IS NULL OR visibility_department=ANY($1::text[]) ORDER BY updated_at DESC LIMIT $2 OFFSET $3",[allowed,q.limit,q.offset]);
     return {items:result.rows,...q};
   });
@@ -173,7 +178,8 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/stats",async(req)=>{
     const actor=await requireUser(req,db,config);
-    const allowed=Object.keys(DEPARTMENTS).filter(d=>canAccess(actor,d as DepartmentKey,config));
+    const checks=await Promise.all((Object.keys(DEPARTMENTS) as DepartmentKey[]).map(async d=>({d,allow:await canUseChannel(config,actor,d,"read")})));
+    const allowed=checks.filter(x=>x.allow).map(x=>x.d);
     const reports=await db.query("SELECT department,count(*)::int AS total FROM reports WHERE department=ANY($1::text[]) GROUP BY department",[allowed]);
     return {reports:reports.rows,source:"database",completeFor:"persisted_reports_only"};
   });

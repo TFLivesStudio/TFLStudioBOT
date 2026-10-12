@@ -3,14 +3,24 @@ import type { Config } from "./config.js";
 import type { DB } from "./db.js";
 import { IDS, DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { createReport } from "./reports.js";
+import { collectStructure } from "./auditor.js";
 export function buildDiscord(config: Config, db: DB): Client {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   client.on("error", error => console.error("discord_client_error", error));
   client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand() || interaction.guildId !== config.DISCORD_GUILD_ID) return;
     try {
+      if (interaction.commandName === "recopilar") {
+        await interaction.deferReply({ephemeral:true});
+        const member=await interaction.guild?.members.fetch(interaction.user.id);
+        if (!member?.roles.cache.has(config.ADMIN_ROLE_ID)) {await interaction.editReply("Sin autorización.");return;}
+        const files=await collectStructure(client,db,interaction.user.id);
+        await interaction.editReply({content:"Inventario estructural parcial, sin mensajes privados ni credenciales.",files:[files.json,files.markdown]});
+        return;
+      }
       if (interaction.commandName === "estado-bot") {
-        const admin = interaction.member && "roles" in interaction.member && Array.isArray(interaction.member.roles) && interaction.member.roles.includes(config.ADMIN_ROLE_ID);
+        const member=await interaction.guild?.members.fetch(interaction.user.id);
+        const admin=member?.roles.cache.has(config.ADMIN_ROLE_ID);
         await interaction.reply({ content: admin ? "TFL STUDIO / Core en línea. Usa el dashboard para diagnósticos avanzados." : "Sin autorización.", ephemeral: true });
         return;
       }
@@ -19,8 +29,8 @@ export function buildDiscord(config: Config, db: DB): Client {
         const key = interaction.options.getString("departamento", true) as DepartmentKey;
         const target = DEPARTMENTS[key];
         if (!target) { await interaction.editReply("Departamento desconocido."); return; }
-        const roles = interaction.member && "roles" in interaction.member ? interaction.member.roles : [];
-        const allowed = Array.isArray(roles) && (roles.includes(config.ADMIN_ROLE_ID) || roles.includes(target.role));
+        const member=await interaction.guild?.members.fetch(interaction.user.id);
+        const allowed = member && !member.pending && (member.roles.cache.has(config.ADMIN_ROLE_ID) || member.roles.cache.has(target.role)) && member.permissionsIn(target.destination).has("ViewChannel");
         if (!allowed) { await interaction.editReply("No tienes autorización para publicar en este departamento."); return; }
         const title = interaction.options.getString("titulo", true);
         const description = interaction.options.getString("descripcion", true);
@@ -39,6 +49,7 @@ export async function registerCommands(config: Config): Promise<void> {
   const choices = Object.keys(DEPARTMENTS).map(k => ({ name: k, value: k }));
   const commands = [
     new SlashCommandBuilder().setName("estado-bot").setDescription("Diagnóstico básico de TFL Studio Core"),
+    new SlashCommandBuilder().setName("recopilar").setDescription("Exporta el inventario estructural (ADMIN)"),
     new SlashCommandBuilder().setName("reporte").setDescription("Publica un registro operativo en tu departamento")
       .addStringOption(o => o.setName("departamento").setDescription("Departamento destino").setRequired(true).addChoices(...choices))
       .addStringOption(o => o.setName("titulo").setDescription("Título del reporte").setMinLength(3).setMaxLength(100).setRequired(true))
