@@ -12,6 +12,7 @@ export const visualSchema=z.object({embeds:z.array(embedSchema).max(3).default([
 export type VisualPayload=z.infer<typeof visualSchema>;
 export async function postAnnouncement(client:Client,channelId:string,title:string,body:string,payload:unknown):Promise<string>{
   const visual=visualSchema.parse(payload);
+  if(visual.embeds.reduce((n,e)=>n+(e.title?.length??0)+(e.description?.length??0)+(e.footer?.length??0)+e.fields.reduce((x,f)=>x+f.name.length+f.value.length,0),0)>5800) throw new Error("Discord embed total size exceeded");
   const channel=await client.channels.fetch(channelId);
   if(!channel || (channel.type!==ChannelType.GuildText && channel.type!==ChannelType.GuildAnnouncement)) throw new Error("Target must be an announcement/text channel");
   const embeds=visual.embeds.map(e=>{

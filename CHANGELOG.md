@@ -8,5 +8,7 @@
 - Reporting, marketing records, guides, billing register, scheduled announcements and audit endpoints.
 - GitHub webhook signature validation, independent push summary and release queues, deduplication keys and recovery states.
 - Documentation for FeatherPanel deployment and explicit limitations.
+- Partial structural /recopilar exports, effective channel permission checks.
+- GitHub commit fallback polling with first-run cursor, editable announcement visual payloads and versioned guide updates.
 
 **Status:** development implementation, not verified in real production or claimed to be V1 complete.

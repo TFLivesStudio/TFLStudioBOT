@@ -80,8 +80,8 @@ export function launchWorker(db: DB, discord: Client, config: Config): () => voi
       // Locked, interrupted or ambiguous outbound actions require reconciliation; never blindly replay.
       await db.query("UPDATE automation_jobs SET status='needs_reconciliation',last_error='Interrupted while running' WHERE status='running' AND locked_at<now()-interval '10 minutes'");
       if(config.GITHUB_POLL_ENABLED) {
-        const sources=await db.query<{repository:string}>("SELECT repository FROM github_sources WHERE enabled AND release_enabled");
-        for(const s of sources.rows) {await fetchGithubRepository(db,config,s.repository);await pollGithubCommits(db,config,s.repository);}
+        const sources=await db.query<{repository:string;release_enabled:boolean;push_enabled:boolean}>("SELECT repository,release_enabled,push_enabled FROM github_sources WHERE enabled AND (release_enabled OR push_enabled)");
+        for(const s of sources.rows) {if(s.release_enabled)await fetchGithubRepository(db,config,s.repository);if(s.push_enabled)await pollGithubCommits(db,config,s.repository);}
       }
     } catch(e){console.error("worker_sweep_failed",e);}
   },300000);

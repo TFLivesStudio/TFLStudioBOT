@@ -45,7 +45,7 @@ Los reportes históricos de Discord **no se importan automáticamente**. Su inde
 
 ## GitHub
 
-El origen \`TFLivesStudio/TFLClient\` se inicializa **desactivado**. Configurar \`GITHUB_WEBHOOK_SECRET\` y webhook en \`POST /api/v1/integrations/github/webhook\`; activar con endpoint ADMIN. Commits de \`main\` se agrupan según \`batch_minutes\`; releases se encolan individualmente para publicación anticipada. El polling alternativo inicial solo consulta releases (requiere \`GITHUB_TOKEN\`); no sustituye completamente los push webhooks. Se registra un ID de entrega y claves únicas en PostgreSQL.
+El origen \`TFLivesStudio/TFLClient\` se inicializa **desactivado**. Configurar \`GITHUB_WEBHOOK_SECRET\` y webhook en \`POST /api/v1/integrations/github/webhook\`; activar con endpoint ADMIN. Commits de \`main\` se agrupan según \`batch_minutes\`; releases se encolan individualmente para publicación anticipada. El polling alternativo permite recuperar releases y commits nuevos desde la rama configurada; al habilitarlo por primera vez establece un cursor sin publicar todo el historial. \`GITHUB_TOKEN\` es recomendable por el límite de la API anónima. Comparaciones de más de 100 commits requieren paginación adicional y se detienen sin avanzar el cursor. Se registra un ID de entrega y claves únicas en PostgreSQL.
 
 **Etiquetas de foro:** los reportes manuales de Network usan UPDATE por defecto y TFL Web utiliza Desarrollo. La categorización exacta debe revisarse antes de activar el flujo.
 
