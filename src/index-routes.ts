@@ -4,6 +4,8 @@ import type { DB } from "./db.js";
 import type { Config } from "./config.js";
 import { requireUser } from "./auth.js";
 import { audit } from "./audit.js";
+import { transaction } from "./db.js";
+import { recoverOrphanedImports } from "./report-import.js";
 import { DEPARTMENTS } from "./ids.js";
 
 const number=z.coerce.number().int().positive();
@@ -59,30 +61,56 @@ export async function registerIndexRoutes(app:FastifyInstance,db:DB,config:Confi
     const source=await db.query<{enabled:boolean;historical_enabled:boolean}>(
       "SELECT enabled,historical_enabled FROM report_index_sources WHERE id=$1",[data.sourceId]);
     if(!source.rows[0]?.enabled || !source.rows[0]?.historical_enabled)throw Object.assign(new Error("Historical index source is not enabled"),{statusCode:409});
-    const existing=await db.query("SELECT id FROM report_import_runs WHERE source_id=$1 AND status IN ('queued','running') LIMIT 1",[data.sourceId]);
-    if(existing.rowCount)throw Object.assign(new Error("Import is already active"),{statusCode:409});
-    const created=await db.query<{id:string}>(
-      "INSERT INTO report_import_runs(source_id,dry_run,started_by) VALUES($1,$2,$3) RETURNING id",
-      [data.sourceId,data.dryRun,actor.userId]);
-    const id=created.rows[0]!.id;
-    await db.query("INSERT INTO automation_jobs(kind,payload,dedup_key,origin) VALUES('history_import',$1,$2,'admin')",
-      [JSON.stringify({runId:id}),"import:first:"+id]);
+    const id=await transaction(db,async c=>{
+      const check=await c.query(
+        "SELECT id FROM report_import_runs WHERE source_id=$1 AND status IN ('queued','running','paused') LIMIT 1 FOR UPDATE",[data.sourceId]);
+      if(check.rowCount)throw Object.assign(new Error("Existing import must finish or be cancelled"),{statusCode:409});
+      const created=await c.query<{id:string}>(
+        "INSERT INTO report_import_runs(source_id,dry_run,started_by) VALUES($1,$2,$3) RETURNING id",
+        [data.sourceId,data.dryRun,actor.userId]);
+      const runId=created.rows[0]!.id;
+      await c.query(
+        "INSERT INTO automation_jobs(kind,payload,dedup_key,origin) VALUES('history_import',$1,$2,'admin')",
+        [JSON.stringify({runId}),"import:first:"+runId]);
+      return runId;
+    });
     await audit(db,"report_index.import.start",actor.userId,"import",id,{dryRun:data.dryRun});
     return {id,status:"queued",dryRun:data.dryRun};
   });
   app.post("/api/v1/report-index/imports/:id/resume",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
     const id=z.object({id:number}).parse(req.params).id;
-    const updated=await db.query("UPDATE report_import_runs SET status='queued',updated_at=now() WHERE id=$1 AND status IN ('paused','failed') RETURNING id",[id]);
-    if(!updated.rowCount)throw Object.assign(new Error("Import cannot be resumed"),{statusCode:409});
-    await db.query("INSERT INTO automation_jobs(kind,payload,origin) VALUES('history_import',$1,'admin')",[JSON.stringify({runId:id})]);
+    await transaction(db,async c=>{
+      const updated=await c.query(
+        "UPDATE report_import_runs SET status='queued',lease_token=NULL,lease_expires_at=NULL,updated_at=now() "+
+        "WHERE id=$1 AND status IN ('paused','failed') RETURNING id",[id]);
+      if(!updated.rowCount)throw Object.assign(new Error("Import cannot be resumed"),{statusCode:409});
+      await c.query("INSERT INTO automation_jobs(kind,payload,origin) VALUES('history_import',$1,'admin')",
+        [JSON.stringify({runId:String(id)})]);
+    });
     await audit(db,"report_index.import.resume",actor.userId,"import",String(id));
     return {ok:true};
+  });
+  app.post("/api/v1/report-index/imports/:id/pause",async req=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const id=z.object({id:number}).parse(req.params).id;
+    const result=await db.query(
+      "UPDATE report_import_runs SET status='paused',lease_token=NULL,lease_expires_at=NULL,"+
+      "last_error='Paused by ADMIN',updated_at=now() WHERE id=$1 AND status IN ('queued','running') RETURNING id",[id]);
+    if(!result.rowCount)throw Object.assign(new Error("Import not pausable"),{statusCode:409});
+    await audit(db,"report_index.import.pause",actor.userId,"import",String(id));
+    return {ok:true};
+  });
+  app.post("/api/v1/report-index/imports/recover",async req=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const result=await recoverOrphanedImports(db);
+    await audit(db,"report_index.import.recover",actor.userId,"import","all",result);
+    return result;
   });
   app.post("/api/v1/report-index/imports/:id/cancel",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
     const id=z.object({id:number}).parse(req.params).id;
-    const result=await db.query("UPDATE report_import_runs SET status='cancelled',updated_at=now(),finished_at=now() WHERE id=$1 AND status IN ('queued','running','paused') RETURNING id",[id]);
+    const result=await db.query("UPDATE report_import_runs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,updated_at=now(),finished_at=now() WHERE id=$1 AND status IN ('queued','running','paused') RETURNING id",[id]);
     if(!result.rowCount)throw Object.assign(new Error("Import not cancellable"),{statusCode:409});
     await audit(db,"report_index.import.cancel",actor.userId,"import",String(id));
     return {ok:true,note:"Cancellation takes effect at the next batch boundary"};

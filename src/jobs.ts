@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
 import { postAnnouncement } from "./presentation.js";
 import { postToDestination } from "./discord.js";
-import { runImportBatch } from "./report-import.js";
+import { runImportBatch,recoverOrphanedImports } from "./report-import.js";
 import { captureStructure } from "./auditor.js";
 import { allocateGithubBatch,confirmGithubPublication } from "./github-batches.js";
 import { transaction } from "./db.js";
@@ -62,9 +62,8 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
     }else if(job.kind==="history_import"){
       if(!config)throw new Error("Import worker requires configuration");
       const id=String(job.payload.runId);
-      await db.query("UPDATE report_import_runs SET status='running' WHERE id=$1 AND status='queued'",[id]);
-      const next=await runImportBatch(db,config,id);
-      if(next==="more")await db.query("INSERT INTO automation_jobs(kind,payload,origin) VALUES('history_import',$1,'admin')",[JSON.stringify({runId:id})]);
+
+      await runImportBatch(db,config,id);
     }else if(job.kind==="report_publish"){
       const id=String(job.payload.reportId??"");
       const rows=await db.query<{department:DepartmentKey;discord_channel_id:string;title:string;description:string;tags:string[];discord_message_id:string|null;publication_status:string}>(
@@ -149,6 +148,7 @@ export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
     catch(e){console.error("worker_failed",safeMessage(e));}
     finally{processing=false;}
   };
+  void recoverOrphanedImports(db).catch(e=>console.error("import_recovery_failed",safeMessage(e)));
   const interval=setInterval(()=>void loop(),10000);
   void loop();
   const sweep=setInterval(async()=>{
@@ -156,8 +156,11 @@ export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
     try{
       await db.query("DELETE FROM sessions WHERE expires_at<now()");
       // No replay after a possible remote publication. ADMIN must reconcile.
-      await db.query("UPDATE automation_jobs SET status='needs_reconciliation',last_error='Worker interrupted: remote result unknown',updated_at=now() WHERE status='running' AND locked_at<now()-interval '10 minutes'");
+      await db.query("UPDATE automation_jobs SET status='needs_reconciliation',last_error='Worker interrupted: remote result unknown',updated_at=now() WHERE status='running' AND kind<>'history_import' AND locked_at<now()-interval '10 minutes'");
       await db.query("UPDATE reports SET publication_status='needs_reconciliation',sync_state='unknown' WHERE publication_status='publishing' AND updated_at<now()-interval '10 minutes'");
+      await db.query("UPDATE automation_jobs SET status='failed',last_error='Expired import worker lease' "+
+        "WHERE kind='history_import' AND status='running' AND locked_at<now()-interval '30 minutes'");
+      await recoverOrphanedImports(db);
       if(config.GITHUB_POLL_ENABLED){
         const rows=await db.query<{repository:string;release_enabled:boolean;push_enabled:boolean}>(
           "SELECT repository,release_enabled,push_enabled FROM github_sources WHERE enabled AND (release_enabled OR push_enabled)");
