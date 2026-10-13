@@ -73,11 +73,18 @@ test("PostgreSQL: outbox, claim concurrency, unique indexes and incremental repo
         return {id:secondId,url:"https://discord.com/channels/"+IDS.guild+"/"+IDS.channels.hosting+"/"+secondId};
       }})}} as unknown as Client;
       const failing={
-        query:async(sql:string,params?:unknown[])=>{
-          if(sql.startsWith("UPDATE reports SET discord_message_id"))throw new Error("Simulated SQL outage after remote publication");
-          return pool.query(sql,params);
-        },
-        connect:()=>pool.connect()
+        query:(sql:string,args?:unknown[])=>pool.query(sql,args),
+        connect:async()=>{
+          const c=await pool.connect();
+          return {
+            query:async(sql:string,args?:unknown[])=>{
+              if(sql.startsWith("UPDATE reports SET discord_message_id"))
+                throw new Error("Simulated SQL outage after remote publication");
+              return c.query(sql,args);
+            },
+            release:()=>c.release()
+          };
+        }
       } as unknown as typeof pool;
       try{
         assert.equal(await runOneJob(failing,remote),true);
