@@ -28,9 +28,11 @@ test("OAuth session is live-scoped, tab-stable and CSRF protected",async()=>{
       if(sql.startsWith("DELETE FROM sessions")){revoked=true;return {rows:[]};}
       if(sql.includes("FROM sessions WHERE"))return {rows:expired||revoked?[]:[{user_id:"111111111111111111",csrf_hash:hash(expected)}]};
       if(sql.startsWith("SELECT * FROM reports"))return {rows:[{department:"network",id:"1"}]};
+      if(sql.startsWith("INSERT INTO billing_records"))return {rows:[{id:"1",version:1}],rowCount:1};
       if(sql.includes("RETURNING id"))return {rows:[{id:"1"}],rowCount:1};
       return {rows:[],rowCount:0};
-    }
+    },
+    connect:async()=>({query:(sql:string)=>db.query(sql),release:()=>undefined})
   } as unknown as DB;
   const discord={isReady:()=>true} as unknown as Client;
   globalThis.fetch=async url=>{
