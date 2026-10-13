@@ -141,7 +141,7 @@ export async function registerGuideRoutes(app:FastifyInstance,db:DB,config:Confi
  app.post("/api/v1/guides/:id/publish",async req=>{
   const actor=await requireUser(req,db,config,{admin:true,mutation:true});
   const {id:guideId}=id.parse(req.params);
-  const d=z.object({expectedVersion:z.number().int().positive(),confirm:z.literal(true)}).parse(req.body);
+  const d=z.object({expectedVersion:z.number().int().positive(),confirm:z.literal(true),tagIds:z.array(z.string().regex(/^\d{17,20}$/)).max(5).default([])}).parse(req.body);
   await transaction(db,async c=>{
     const current=await c.query<Guide>("SELECT * FROM guides WHERE id=$1 FOR UPDATE",[guideId]);
     const item=current.rows[0];
@@ -152,7 +152,7 @@ export async function registerGuideRoutes(app:FastifyInstance,db:DB,config:Confi
     await c.query(
       "INSERT INTO automation_jobs(kind,payload,dedup_key,origin,destination,correlation) "+
       "VALUES('guide_publish',$1,$2,'admin',$3,$4) ON CONFLICT(dedup_key) DO NOTHING",
-      [JSON.stringify({id:String(guideId),version:item.version}),"guide:"+guideId+":"+item.version,
+      [JSON.stringify({id:String(guideId),version:item.version,tagIds:d.tagIds}),"guide:"+guideId+":"+item.version,
        IDS.channels.guias,"STUDIO-GUIDE-"+guideId+"-v"+item.version]);
   });
   await audit(db,"guide.publish.request",actor.userId,"guide",String(guideId));

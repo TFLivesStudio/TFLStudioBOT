@@ -3,7 +3,7 @@ import type { DB } from "./db.js";
 import { createReport } from "./reports.js";
 import { fetchGithubRepository, pollGithubCommits } from "./github.js";
 import type { Config } from "./config.js";
-import { DEPARTMENTS, type DepartmentKey } from "./ids.js";
+import { DEPARTMENTS, IDS, type DepartmentKey } from "./ids.js";
 import { postAnnouncement } from "./presentation.js";
 import { postToDestination } from "./discord.js";
 import { runImportBatch,recoverOrphanedImports } from "./report-import.js";
@@ -90,6 +90,32 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
           [job.id,job.attempts]);
       });
       return true;
+    }else if(job.kind==="guide_publish"){
+      const guideId=String(job.payload.id);
+      const version=Number(job.payload.version);
+      const rows=await db.query<{title:string;body:string;version:number;lifecycle:string;discord_sync_state:string;discord_thread_id:string|null}>(
+        "SELECT title,body,version,lifecycle,discord_sync_state,discord_thread_id FROM guides WHERE id=$1",[guideId]);
+      const guide=rows.rows[0];
+      if(!guide || guide.lifecycle!=="active" || guide.version!==version || guide.discord_sync_state!=="queued" || guide.discord_thread_id)
+        throw new Error("Guide changed, archived or already linked");
+      if(guide.body.length>1450)throw new Error("Guide exceeds one Discord post");
+      remoteStarted=true;
+      const posted=await postToDestination(discord,IDS.channels.guias,"GUÍA / "+guide.title.slice(0,85),
+        guide.body,Array.isArray(job.payload.tagIds)?job.payload.tagIds.filter((t):t is string=>typeof t==="string"):[],
+        "STUDIO-GUIDE-"+guideId+"-v"+version);
+      if(!posted.threadId)throw new Error("Guide must be a forum thread");
+      await transaction(db,async c=>{
+        const update=await c.query(
+          "UPDATE guides SET discord_thread_id=$2,discord_sync_state='published',discord_synced_version=$3,updated_at=now() "+
+          "WHERE id=$1 AND version=$3 AND discord_sync_state='queued' RETURNING id",
+          [guideId,posted.threadId,version]);
+        if(!update.rowCount)throw new Error("Guide changed during remote publication");
+        await c.query("UPDATE automation_jobs SET status='done',completed_at=now(),last_error=NULL,remote_message_id=$2,"+
+          "remote_channel_id=$3,updated_at=now() WHERE id=$1",[job.id,posted.messageId,posted.threadId]);
+        await c.query("UPDATE job_attempts SET ended_at=now(),outcome='done' WHERE job_id=$1 AND attempt=$2",
+          [job.id,job.attempts]);
+      });
+      return true;
     }else if(job.kind==="github_sync"){
       if(!config)throw new Error("GitHub sync requires configuration");
       await pollGithubCommits(db,config,String(job.payload.repo));
@@ -119,8 +145,15 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       await db.query("UPDATE announcements SET status='publishing' WHERE id=$1 AND status='scheduled'",[id]);
       remoteStarted=true;
       const msg=await postAnnouncement(discord,item.target_channel_id,item.title,item.body,item.visual_payload,"STUDIO-ANNOUNCEMENT-"+id);
-      await db.query("UPDATE announcements SET status='published',published_at=now(),discord_message_id=$2 WHERE id=$1",[id,msg]);
-      await db.query("UPDATE automation_jobs SET remote_message_id=$2,remote_channel_id=$3 WHERE id=$1",[job.id,msg,item.target_channel_id]);
+      await transaction(db,async c=>{
+        await c.query("UPDATE announcements SET status='published',published_at=now(),discord_message_id=$2,updated_at=now() WHERE id=$1",
+          [id,msg]);
+        await c.query("UPDATE automation_jobs SET status='done',completed_at=now(),last_error=NULL,"+
+          "remote_message_id=$2,remote_channel_id=$3,updated_at=now() WHERE id=$1",[job.id,msg,item.target_channel_id]);
+        await c.query("UPDATE job_attempts SET ended_at=now(),outcome='done' WHERE job_id=$1 AND attempt=$2",
+          [job.id,job.attempts]);
+      });
+      return true;
     }else throw new Error("Unknown job type");
     await db.query("UPDATE automation_jobs SET status='done',completed_at=now(),last_error=NULL,updated_at=now() WHERE id=$1",[job.id]);
     await completeAttempt(db,job,"done");
@@ -133,6 +166,12 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       [job.id,status,err,delay]);
     if(job.kind==="auditor_snapshot")await db.query(
       "UPDATE audit_snapshots SET status=$2,error=$3 WHERE id=$1",[job.payload.snapshotId,status==="queued"?"queued":"failed",err]);
+    if(job.kind==="guide_publish" && remoteStarted)await db.query(
+      "UPDATE guides SET discord_sync_state='conflict' WHERE id=$1 AND discord_sync_state='queued'",
+      [job.payload.id]);
+    if(job.kind==="announcement" && remoteStarted)await db.query(
+      "UPDATE announcements SET status='failed',last_error='Remote publication may have succeeded' WHERE id=$1 AND status='publishing'",
+      [job.payload.id]);
     if(job.kind==="report_publish" && remoteStarted)await db.query(
       "UPDATE reports SET publication_status='needs_reconciliation',sync_state='unknown',updated_at=now() WHERE id=$1",[job.payload.reportId]);
     await completeAttempt(db,job,status,err);
