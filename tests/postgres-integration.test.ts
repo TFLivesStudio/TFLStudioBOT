@@ -63,6 +63,42 @@ test("PostgreSQL: outbox, claim concurrency, unique indexes and incremental repo
       assert.ok(deleted.rows[0].deleted_at);
       await pool.query("DELETE FROM reports WHERE discord_message_id=$1",[msgId]);
     });
+    await t.test("ambiguous Discord publication never auto-retries without reconciliation",async()=>{
+      const secondKey="ambiguous:"+suffix;
+      const secondId=String(BigInt(discordMessageId)+3n);
+      await createReport(pool,client,"hosting","Remote ambiguity test","Content","111111111111111111",secondKey);
+      let sent=0;
+      const remote={channels:{fetch:async()=>({type:0,send:async()=>{
+        sent++;
+        return {id:secondId,url:"https://discord.com/channels/"+IDS.guild+"/"+IDS.channels.hosting+"/"+secondId};
+      }})}} as unknown as Client;
+      const failing={
+        query:async(sql:string,params?:unknown[])=>{
+          if(sql.startsWith("UPDATE reports SET discord_message_id"))throw new Error("Simulated SQL outage after remote publication");
+          return pool.query(sql,params);
+        },
+        connect:()=>pool.connect()
+      } as unknown as typeof pool;
+      try{
+        assert.equal(await runOneJob(failing,remote),true);
+        const record=await pool.query<{id:string;publication_status:string}>("SELECT id,publication_status FROM reports WHERE external_key=$1",[secondKey]);
+        const job=await pool.query("SELECT status FROM automation_jobs WHERE payload->>'reportId'=$1",[record.rows[0]!.id]);
+        assert.equal(record.rows[0]!.publication_status,"needs_reconciliation");
+        assert.equal(job.rows[0].status,"needs_reconciliation");
+        assert.equal(await runOneJob(pool,remote),false);
+        assert.equal(sent,1);
+      }finally{
+        const row=await pool.query<{id:string}>("SELECT id FROM reports WHERE external_key=$1",[secondKey]);
+        if(row.rows[0]){
+          const job=await pool.query<{id:string}>("SELECT id FROM automation_jobs WHERE payload->>'reportId'=$1",[row.rows[0].id]);
+          if(job.rows[0]){
+            await pool.query("DELETE FROM job_attempts WHERE job_id=$1",[job.rows[0].id]);
+            await pool.query("DELETE FROM automation_jobs WHERE id=$1",[job.rows[0].id]);
+          }
+          await pool.query("DELETE FROM reports WHERE id=$1",[row.rows[0].id]);
+        }
+      }
+    });
     await t.test("failed transactions roll back",async()=>{
       await assert.rejects(transaction(pool,async c=>{
         await c.query("INSERT INTO audit_events(action,target_kind,target_id) VALUES('test.rollback','test',$1)",[suffix]);

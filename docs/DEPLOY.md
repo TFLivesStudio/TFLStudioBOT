@@ -15,3 +15,13 @@
 Seguridad: restringir acceso de red y CORS, no habilitar API a través de HTTP público, monitorizar 401/403/429, realizar prueba con cuenta no administrativa y con roles de cada departamento.
 
 Varias áreas usan canales de texto para reportes y otras foros. El bot no crea ni modifica categorías, canales o permisos.
+
+
+## Requisitos adicionales 0.2.0
+
+- Crear SESSION_SECRET aleatorio de al menos 32 caracteres y conservarlo exclusivamente en el gestor de secretos. Cambiarlo invalida los CSRF existentes; coordinar rotaciones.
+- INDEX_MESSAGE_CONTENT_INTENT=false inicialmente; cualquier cambio requiere configuración explícita del Discord Developer Portal y autorización de captura.
+- Mantener desactivados report_index_sources, los webhooks y github_sources hasta pruebas controladas y permiso explícito.
+- El servicio debe aplicar siete migraciones versionadas, comprobar el esquema y disponer de restauración probada de PostgreSQL.
+- La API y el dashboard pueden usar dominios del mismo sitio organizacional con cookies SameSite=Lax. Configurar CORS_ORIGIN exacto y HTTPS.
+- No desplegar a producción por disponer de CI verde: falta validación de roles, destinos y contingencias con instancias de prueba.

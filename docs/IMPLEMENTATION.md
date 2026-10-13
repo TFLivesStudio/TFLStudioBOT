@@ -32,3 +32,8 @@ Tablas: `sessions`, `audit_events`, `reports`, `publication_records`, `guides`, 
 4. Manejo de paginación de comparaciones GitHub de más de 100 commits y reintentos de polling.
 5. OpenAPI ampliado con request/response schemas y ejemplos.
 6. Pruebas con PostgreSQL/Discord simulados y validación de build/TypeScript.
+
+
+## Actualización de consolidación (2026-10-12)
+
+Se implementaron outbox, indexación autorizada, importación por lotes, reconciliación ADMIN, HMAC-CSRF estable, sincronización GitHub paginada y auditoría estructural ampliada. La cobertura real de Discord y las funciones restantes se detallan en docs/CIERRE-MISION-2026-10-12.md. No se han desplegado ni activado componentes de producción.

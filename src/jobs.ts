@@ -47,14 +47,16 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       const selected=await db.query<{options:{includeArchived?:boolean;maxArchivedPerForum?:number};status:string}>(
         "SELECT options,status FROM audit_snapshots WHERE id=$1",[id]);
       const row=selected.rows[0];
-      if(!row || row.status==="done")return true;
-      await db.query("UPDATE audit_snapshots SET status='running' WHERE id=$1",[id]);
-      const output=await captureStructure(discord,config,{
-        includeArchived:row.options.includeArchived??false,
-        maxArchivedPerForum:row.options.maxArchivedPerForum??100
-      });
-      await db.query("UPDATE audit_snapshots SET status='done',snapshot=$2,markdown=$3,completeness=$4,finished_at=now(),error=NULL WHERE id=$1",
-        [id,JSON.stringify(output.data),output.markdown,output.data.completeness]);
+      if(!row)throw new Error("Snapshot no longer exists");
+      if(row.status!=="done"){
+        await db.query("UPDATE audit_snapshots SET status='running' WHERE id=$1",[id]);
+        const output=await captureStructure(discord,config,{
+          includeArchived:row.options.includeArchived??false,
+          maxArchivedPerForum:row.options.maxArchivedPerForum??100
+        });
+        await db.query("UPDATE audit_snapshots SET status='done',snapshot=$2,markdown=$3,completeness=$4,finished_at=now(),error=NULL WHERE id=$1",
+          [id,JSON.stringify(output.data),output.markdown,output.data.completeness]);
+      }
     }else if(job.kind==="history_import"){
       if(!config)throw new Error("Import worker requires configuration");
       const id=String(job.payload.runId);

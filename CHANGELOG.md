@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 (desarrollo, octubre 2026)
+
+- Corrección unificada de permisos GuildForum/GuildMedia y canales; pruebas de sobrescrituras.
+- OAuth2 fortalecido y CSRF HMAC estable entre pestañas.
+- Reportes mediante outbox transaccional; estado de publicación y conciliación ADMIN.
+- Captura de reportes manuales opt-in y importación histórica con checkpoints, dry-run y API.
+- Sincronización GitHub con HMAC, paginación y cursor CAS; releases y commits separados.
+- Auditor estructural ampliado y snapshots restringidos comparables.
+- Pruebas PostgreSQL 16, escenarios de concurrencia y fallos remotos simulados.
+- Documentación de seguridad, arquitectura, migraciones y limitaciones.
+
+**Aún no es una V1 de producción; no se ejecutó en el Discord real.**
+
+# Changelog
+
 ## 0.1.0 — 2026-10-12
 
 - Initial API-first modular Discord backend scaffold in official GitHub repository.

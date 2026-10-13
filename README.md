@@ -2,7 +2,7 @@
 
 **Backend administrativo privado de TFL Studio** · Discord Bot + API REST v1 + PostgreSQL + jobs · **Sin dashboard integrado**.
 
-> Estado: implementación inicial en desarrollo. No desplegado ni verificado contra Discord/GitHub de producción. No significa que la V1 completa esté terminada.
+> Estado: consolidación técnica 0.2.0 en desarrollo. CI con PostgreSQL y pruebas controladas. Sin despliegue ni pruebas sobre Discord/GitHub de producción. La V1 completa permanece pendiente.
 
 ## Principios invariables
 
@@ -41,25 +41,25 @@ En producción se requieren HTTPS, `COOKIE_SECURE=true` y configuración exacta 
 - Estado de jobs, auditoría de acciones, estadísticas de registros
 - Configuración de repositorio TFL Client, webhook GitHub firmado, procesador de releases y commits agrupados
 
-Los reportes históricos de Discord **no se importan automáticamente**. Su indexación futura requiere alcance y permisos aprobados.
+Los reportes históricos de Discord pueden importarse mediante una herramienta ADMIN por lotes, pero todas las fuentes de captura comienzan desactivadas y el modo de simulación es el predeterminado. La importación real requiere alcance y permisos aprobados.
 
 ## GitHub
 
-El origen `TFLivesStudio/TFLClient` se inicializa **desactivado**. Configurar `GITHUB_WEBHOOK_SECRET` y webhook en `POST /api/v1/integrations/github/webhook`; activar con endpoint ADMIN. Commits de `main` se agrupan según `batch_minutes`; releases se encolan individualmente para publicación anticipada. El polling alternativo permite recuperar releases y commits nuevos desde la rama configurada; al habilitarlo por primera vez establece un cursor sin publicar todo el historial. `GITHUB_TOKEN` es recomendable por el límite de la API anónima. Comparaciones de más de 100 commits requieren paginación adicional y se detienen sin avanzar el cursor. Se registra un ID de entrega y claves únicas en PostgreSQL.
+El origen `TFLivesStudio/TFLClient` se inicializa **desactivado**. Configurar `GITHUB_WEBHOOK_SECRET` y webhook en `POST /api/v1/integrations/github/webhook`; activar con endpoint ADMIN. Commits de `main` se agrupan según `batch_minutes`; releases se encolan individualmente para publicación anticipada. El polling alternativo permite recuperar releases y commits nuevos desde la rama configurada; al habilitarlo por primera vez establece un cursor sin publicar todo el historial. `GITHUB_TOKEN` es recomendable por el límite de la API anónima. Comparaciones de más de 100 commits se recorren por páginas y el cursor solo avanza tras recuperarlas íntegramente; las divergencias o límites defensivos generan error y exigen intervención. Se registra un ID de entrega y claves únicas en PostgreSQL.
 
 **Etiquetas de foro:** los reportes manuales de Network usan UPDATE por defecto y TFL Web utiliza Desarrollo. La categorización exacta debe revisarse antes de activar el flujo.
 
-**Precaución sobre duplicados:** publicar en Discord y confirmar una transacción SQL no forman una transacción distribuida. Ante un fallo ambiguo el sistema requerirá reconciliación operativa antes de reintentar; no prometer exactamente una publicación bajo todos los fallos. La separación semántica entre changelog de release y commits se mantiene, pero la desduplicación semántica completa entre ambos exige una política posterior.
+**Precaución sobre duplicados:** publicar en Discord y confirmar una transacción SQL no forman una transacción distribuida. Ante un fallo ambiguo el sistema requerirá reconciliación operativa antes de reintentar; no prometer exactamente una publicación bajo todos los fallos. La separación entre changelog de release y commits se mantiene; vincular exhaustivamente releases a sus SHAs para evitar solapamientos semánticos todavía requiere trabajo.
 
 ## Seguridad y límites
 
 - Mantener secretos solo en variables de entorno; no versionar tokens, dumps ni información de personal.
 - Sesiones Hash SHA-256, CSRF por sesión, verificación webhook HMAC-SHA256, CORS exacto, rate limit, consultas parametrizadas, comprobación de ámbito por área y permisos ADMIN.
-- `/recopilar` exporta un nuevo inventario estructural parcial JSON/Markdown. No se ha migrado el código original del Auditor ni equivale a su exportación completa.
+- `/recopilar` genera inventario estructural ampliado JSON/Markdown, con secciones de completitud; la API ADMIN permite snapshots y comparación. No se ha migrado el código original del Auditor ni se garantiza obtener datos que Discord no permita consultar.
 - Este árbol no es una restauración del bot Auditor antiguo. Es una aplicación nueva que preserva el destino y el modelo funcional del servidor.
 - Ningún componente publica ni despliega por el simple hecho de estar escrito en GitHub. La escritura ocurrirá **solo cuando se arranque el proceso con credenciales reales**.
 
-Consulta [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) y [docs/DEPLOY.md](docs/DEPLOY.md).
+Consulta [arquitectura](docs/ARCHITECTURE.md), [seguridad](docs/SEGURIDAD.md), [indexación](docs/INDEXACION.md), [GitHub](docs/GITHUB-INTEGRATION.md), [recuperación](docs/RECUPERACION.md), [migraciones](docs/MIGRACIONES.md), [despliegue](docs/DEPLOY.md) y [matriz de cierre](docs/CIERRE-MISION-2026-10-12.md).
 
 ## Estado de verificación
 

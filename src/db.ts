@@ -6,7 +6,8 @@ export function openDb(config: Config): DB {
   return new Pool({ connectionString: config.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 });
 }
 export async function verifySchema(db: DB): Promise<void> {
-  await db.query("SELECT id FROM schema_migrations LIMIT 1");
+  const check=await db.query("SELECT 1 FROM schema_migrations WHERE id=$1",["007_report_cancelled.sql"]);
+  if(!check.rowCount)throw new Error("Database migrations incomplete: run npm run migrate");
 }
 export async function transaction<T>(db: DB, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await db.connect();

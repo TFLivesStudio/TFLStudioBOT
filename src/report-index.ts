@@ -50,7 +50,7 @@ export async function indexDiscordMessage(db:DB,source:Source,msg:Indexable):Pro
     "discord_thread_id=EXCLUDED.discord_thread_id,updated_at=now(),indexed_at=now(),"+
     "tags=EXCLUDED.tags,attachments=EXCLUDED.attachments,content_state=EXCLUDED.content_state,"+
     "sync_state=EXCLUDED.sync_state,description=CASE WHEN EXCLUDED.content_state='available' THEN EXCLUDED.description ELSE reports.description END "+
-    "RETURNING id",
+    "WHERE reports.deleted_at IS NULL RETURNING id",
     [source.department,title,content.slice(0,15000),msg.authorId,source.channel_id,isThread?msg.channelId:null,msg.id,
       "discord:"+msg.id,IDS.guild,state,state==="available"?"complete":"partial",
       JSON.stringify(msg.tags),JSON.stringify(source.capture_content?msg.attachments:[]),msg.createdAt]);
