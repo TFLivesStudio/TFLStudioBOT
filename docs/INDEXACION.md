@@ -1,20 +1,28 @@
-# INDEXACIÓN / REPORTES MANUALES
-
-El sistema admite publicaciones del bot, mensajes manuales y reportes GitHub. Se conservan identificadores originales de Discord, fuente, departamento, fecha, contenido cuando está autorizado, estado de sincronización y marcas de eliminación.
+# Reportes, índice e importaciones — 0.3.0
 
 ## Fuentes
 
-Fuentes auditadas: Network, TFL Client, TFL Web, Web Brillara, Hosting, Publicidad, Propiedades y Merch. Todas inician desactivadas; capture_content e historical_enabled también están desactivadas. Billing y Administración Global se excluyen del índice general.
+Reportes generados por slash, API, GitHub, mensajes/hilos manuales e historial autorizado comparten tabla reports y metadatos de origen, departamento, proyecto, autor, canal/foro/hilo, fecha, tags, sync_state y publication_status.
 
-Eventos: messageCreate, messageUpdate, messageDelete, threadCreate y threadUpdate. El starter de un foro representa su reporte, y las respuestas no generan reportes separados. Los mensajes propios se correlacionan con su ID interno para evitar registros duplicados.
+Fuentes iniciales: Network, Client, TFL Web, Web Brillara, Hosting, Publicidad, Propiedades y Merch. Por defecto enabled=false, capture_content=false y historical_enabled=false. Billing y Administración Global quedan fuera del índice común. Intent privilegiado MessageContent desactivado por defecto.
 
-## Historial
+## Cambios en tiempo real
 
-La API ADMIN ofrece fuentes, progreso, inicio, cancelación y reanudación. El modo dry-run predeterminado registra contadores pero no escribe reportes. Los canales de texto se paginan por message ID; los foros recorren hilos activos y archivados públicos accesibles. Los checkpoints permiten reinicios y las claves únicas reducen duplicados.
+Se procesan messageCreate, messageUpdate, messageDelete, messageDeleteBulk, threadCreate, threadUpdate y threadDelete solo en destinos autorizados. El primer mensaje del hilo de foro representa el reporte, no cada respuesta. Un mensaje del propio bot se vincula por marca de correlación y autor comprobado, sin crear registro manual duplicado. Los eventos parciales no sobrescriben contenido conocido, y una edición vieja no debe reemplazar una versión de fecha posterior. Eliminaciones/threads inaccesibles preservan tombstones o estados missing/deleted.
 
-Los fallos de permisos, el contenido no disponible y los archivos privados no se reemplazan por valores inventados. El resultado debe presentarse como parcial si no se pudo recorrer todo el alcance. La cancelación es cooperativa entre lotes. Las marcas de tiempo iguales en páginas archivadas pueden necesitar una verificación posterior. No se descargan archivos adjuntos indiscriminadamente.
+Los attachments nunca se descargan masivamente. La indexación no inventa contenido faltante. Un estado unavailable no significa que el usuario borrase el mensaje.
 
+## Histórico
 
-## Cobertura del dashboard
+- ADMIN configura fuentes mediante /api/v1/report-index/sources.
+- Importaciones ADMIN: iniciar, pausar, cancelar, reanudar, consultar errores y progreso, recuperar huérfanos.
+- Dry-run por defecto (sin insertar reportes definitivos, sin publicar Discord).
+- Canales de texto usan cursor de mensaje descendente; foros recorren hilos activos y archivados públicos accesibles. Los errores no avanzan cursores incompletos.
+- Cada lote almacena checkpoint y siguiente trabajo en la misma transacción. Leases evitan dos workers en el mismo lote. El reconciliador reprograma importaciones running sin lease vigente; las fuentes desactivadas producen estado paused.
+- Problemas de timestamps archivados idénticos, hilos inaccesibles, nuevos hilos durante el recorrido o API parcial no garantizan cobertura total; la API marca cobertura parcial.
 
-GET /api/v1/report-index/coverage (solo ADMIN) devuelve por fuente: cantidad de registros guardados, cuerpos no disponibles, fecha de índice y último proceso histórico. Declara observed_only_or_partial. Los filtros de reportes admiten departamento, proyecto, fuente y rango de fechas; no prometen censos completos de Discord.
+## Consulta y permisos
+
+GET /api/v1/reports admite filtros de departamento, búsqueda, proyecto, fuente, autor, canal, intervalo, estado de sincronización y publicación, paginación y orden. La URL Discord se deriva solo de IDs conocidos. GET /api/v1/reports/{id} revisa permisos en el destino en cada solicitud. GET /api/v1/reports/export requiere ADMIN y protege contra fórmulas CSV.
+
+GET /api/v1/report-index/coverage y GET /api/v1/stats muestran recuentos observados con fuente y calidad, no totales certificados del Discord histórico. Ningún ID adivinado permite acceso a otro departamento.

@@ -137,7 +137,7 @@ export async function executeConfiguredAutomation(db:DB,config:Config|undefined,
 export async function registerAutomationRoutes(app:FastifyInstance,db:DB,config:Config):Promise<void>{
  app.get("/api/v1/automations",async req=>{
   await requireUser(req,db,config,{admin:true});
-  const q=page.extend({enabled:z.coerce.boolean().optional(),kind:type.optional()}).parse(req.query);
+  const q=page.extend({enabled:z.enum(['true','false']).transform(v=>v==='true').optional(),kind:type.optional()}).parse(req.query);
   const result=await db.query(
    "SELECT * FROM automation_definitions WHERE ($1::boolean IS NULL OR enabled=$1) "+
    "AND ($2::text IS NULL OR kind=$2) ORDER BY id DESC LIMIT $3 OFFSET $4",

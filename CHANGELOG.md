@@ -1,32 +1,20 @@
-# Changelog
+# CHANGELOG
 
-## 0.2.0 (desarrollo, octubre 2026)
+## 0.3.0 — Consolidación funcional, octubre 2026
 
-- Corrección unificada de permisos GuildForum/GuildMedia y canales; pruebas de sobrescrituras.
-- OAuth2 fortalecido y CSRF HMAC estable entre pestañas.
-- Reportes mediante outbox transaccional; estado de publicación y conciliación ADMIN.
-- Captura de reportes manuales opt-in y importación histórica con checkpoints, dry-run y API.
-- Sincronización GitHub con HMAC, paginación y cursor CAS; releases y commits separados.
-- Auditor estructural ampliado y snapshots restringidos comparables.
-- Pruebas PostgreSQL 16, escenarios de concurrencia y fallos remotos simulados.
-- Documentación de seguridad, arquitectura, migraciones y limitaciones.
+- Ciclo transaccional de commits GitHub: cada SHA queda asociado a un reporte; solo se confirma después de la publicación real o reconciliación comprobada. Cancelación libera las asignaciones.
+- Importaciones con leases, checkpoints y próximo job atómicos, dry-run, reanudación y recuperación de huérfanos.
+- Indexación Discord reforzada: ediciones, eventos parciales, duplicados, eliminación, estados de hilos, vinculaciones del bot.
+- Administración de anuncios: versiones, edición, duplicación, plantillas, programación, reprogramación, cancelación, publicación por outbox y reconciliación.
+- Guías: historial/restauración, control de versiones, archivado, vínculo y publicación a foro autorizado.
+- Billing: registros y suscripciones editables, historial administrativo, precisión de unidades menores y clasificación por moneda sin FX.
+- Automatizaciones tipadas configurables y opt-in, trabajos programados y avisos internos.
+- Relación de releases con tags, SHAs y rangos verificables; anomalías por tags movidos o notas editadas.
+- Diagnóstico del backend, estados de jobs e importaciones, estadísticas por origen y OpenAPI.
+- Suite reforzada con PostgreSQL 16, pruebas de concurrencia, fallos SQL y contratos.
 
-**Aún no es una V1 de producción; no se ejecutó en el Discord real.**
+No desplegada; siguen pendientes ensayos contra servicios reales, políticas de retención y completitud de algunos escenarios.
 
-# Changelog
+## 0.2.0
 
-## 0.1.0 — 2026-10-12
-
-- Initial API-first modular Discord backend scaffold in official GitHub repository.
-- PostgreSQL schema and versioned migration runner.
-- Discord OAuth2 session authentication and CSRF protection; ADMIN/department role-scoped operations.
-- Reporting, marketing records, guides, billing register, scheduled announcements and audit endpoints.
-- GitHub webhook signature validation, independent push summary and release queues, deduplication keys and recovery states.
-- Documentation for FeatherPanel deployment and explicit limitations.
-- Partial structural /recopilar exports, effective channel permission checks.
-- GitHub commit fallback polling with first-run cursor, editable announcement visual payloads and versioned guide updates.
-
-- Dependency tree pinned in package-lock.json; CI installs with npm ci.
-- Post-approval /inicio, restricted staff directory, billing subscriptions and marketing stats.
-
-**Status:** development implementation, not verified in real production or claimed to be V1 complete.
+Ver docs/CIERRE-MISION-2026-10-12.md.

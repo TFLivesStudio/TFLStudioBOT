@@ -1,24 +1,27 @@
-# TFL CLIENT / GITHUB
+# GitHub / commits, releases y procedencia — 0.3.0
 
-## Flujos independientes
+Fuente principal futura: TFLivesStudio/TFLClient, sembrada desactivada. No se ha configurado webhook real ni publicado en Discord.
 
-DESARROLLO: sincronización de la rama configurada, consulta de SHAs con comparaciones paginadas, registro de commits, agrupación por ventana y publicación con enlaces/autores.
+## Desarrollo
 
-RELEASE: versión, título, fecha, tipo release/prerelease, URL y changelog oficial. Se procesa de forma independiente, sin esperar los lotes de desarrollo.
+HMAC-SHA256 valida el body original del webhook y delivery ID deduplica entregas. Pushes en rama configurada programan sincronización; commits se recuperan por páginas desde GitHub Compare con SHA y cursor CAS. Los límites de comparación, force pushes y cambios de rama registran incertidumbre y evitan avance silencioso.
 
-## Requisitos de integridad
+github_report_commits asocia cada SHA a su resumen mediante transacción. El reporte y outbox quedan encolados sin marcar reported_at. Solo publicación Discord confirmada o conciliación con mensaje verificado marca su estado como publicado. Un lote cancelado libera commits no publicados para reagrupación. La agrupación prioriza baja saturación y conserva enlaces/SHAs del trabajo detectado.
 
-GitHub webhook exige firma HMAC-SHA256 del cuerpo original. Repositorios y ramas deben figurar en configuración; los delivery IDs se deduplican. No se confía en arrays truncables de commits recibidos por webhook. Los cambios se recuperan desde GitHub Compare, avanzando cursor solo al comprobar el conjunto completo y con actualización condicional en PostgreSQL. Force pushes o comparaciones incompletas dejan error explícito y cursor intacto.
+## Releases
 
-El sondeo alternativo recupera commits y releases sin exigir webhook cuando se configura conectividad y credenciales. La primera sincronización establece la línea base, sin inventar historia. La API ADMIN permite fuentes, rama, ventana, prerreleases, activación y sincronización manual.
+Flujo separado y sin esperar ventana de commits. Conserva versión, tag, fecha, título, changelog oficial, URL y prerelease si está habilitado. La relación github_release_records guarda SHA observado, SHA resuelto, referencia del tag, relación con release previa y estado de incertidumbre. github_release_commits guarda SHA que pertenecen al rango verificado, cuando GitHub permite demostrarlo. Un tag movido mantiene el SHA original y registra anomalía; ediciones de notas quedan en revisión y no reescriben automáticamente reportes ya publicados.
 
-TFLivesStudio/TFLClient permanece desactivado por defecto. No configurar webhook real ni activar publicaciones sin autorización.
+No se elimina un commit por similitud de texto. Si no existe referencia comprobable, ambos flujos mantienen sus propios registros y estado unknown/range_unavailable.
 
-## Solapamiento
+## API ADMIN
 
-Las releases conservan sus changelogs oficiales; los commits conservan sus propias referencias. No se descartan registros por similitud textual. La vinculación exhaustiva entre tags y SHAs de cada release sigue pendiente. Nunca prometer exactamente una publicación ante fallos arbitrarios de sistemas externos.
+- GET/POST /api/v1/github/sources, PATCH /api/v1/github/sources/{id}, POST /api/v1/github/sources/{id}/sync
+- GET /api/v1/github/commits (estado detected/assigned/published/ambiguous/legacy)
+- GET /api/v1/github/releases y /api/v1/github/releases/{id}/commits
+- GET /api/v1/jobs y API de reconciliación ante fallo remoto
+- GET /api/v1/diagnostics para última sincronización, errores y brechas
 
+## Limitaciones
 
-## Brechas de cobertura
-
-La primera línea base puede omitir historia anterior; la fuente guarda coverage_gap de forma persistente. También se conserva un aviso si un push inicial no ofrece base verificable. ADMIN puede reconocer esta advertencia por API con una razón registrada, pero nunca se rellena historia no observada. Los errores transitorios se guardan aparte en last_sync_error.
+Rango SHA solo verificable con tags accesibles y versión anterior conocida. Force pushes, tags privados, repos renombrados y webhooks perdidos pueden exigir intervención. Comparación muy extensa y paginación incompleta nunca se reportan como cobertura total. No hay integración de producción activa.

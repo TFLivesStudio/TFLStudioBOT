@@ -1,37 +1,35 @@
-# TFL STUDIO CORE / ESTADO DE IMPLEMENTACIÓN
+# TFL STUDIO CORE — ESTADO 0.3.0
 
-**Versión:** 0.2.0 en desarrollo. No es la V1 final ni está desplegada en producción.
+**Fase:** consolidación funcional y preparación para ensayos operativos. NO V1 de producción.
 
-## Implementación existente
+## Implementado
 
-- Autorización compartida entre comandos y API, incluyendo permisos efectivos de canales y rol ADMIN.
-- OAuth2, sesiones HttpOnly, token CSRF estable por sesión y verificación actual de membresía.
-- Reportes manuales con outbox, deduplicación y conciliación de operaciones ambiguas.
-- Captura opt-in de reportes de canales y foros; importación histórica por lotes con dry-run, checkpoints y estado visible.
-- Integraciones GitHub mediante HMAC, ramas configurables, comparaciones paginadas, cursor transaccional y releases separadas.
-- Guías versionadas, registros de publicidad, anuncios básicos programados, asignaciones ADMIN y registros Billing.
-- Auditor estructural ampliado, snapshots privados, descargas y comparación de inventarios.
-- API versionada para el futuro dashboard independiente, documentada parcialmente mediante OpenAPI.
+- Ciclo transaccional para lotes de commits GitHub: detección, SHA/reporte, outbox, confirmación remota y conciliación. reportado no significa meramente encolado.
+- Importaciones históricas con lease por ejecución, siguiente job + checkpoint atómicos, recuperación de huérfanos, dry-run, pausa y API ADMIN.
+- Reportes del bot, manuales y GitHub con clasificación por fuente/proyecto, estado de sincronización, eventos de edición/eliminación y permisos vivos. Historial puede ser parcial.
+- Anuncios: borradores, edición por versión, duplicación, templates, validación de embeds y URL, programación/reprogramación/cancelación, publicar ahora explícitamente, logs y outbox.
+- Guías: lectura por visibilidad, versiones/revisiones, restaurar, archivar, vincular y publicar en foro autorizado, estados de conflicto sin sobreescritura remota.
+- Billing ADMIN: registros, suscripciones, vencimientos, filtros, versión esperada e historial transaccional before/after; aritmética exacta en unidades menores.
+- Automatizaciones ADMIN: tipos cerrados y validados, intervalos y manual, estado inicial desactivado, ejecución idempotente, historial, avisos internos. Sin ejecución arbitraria de JS/SQL/shell.
+- GitHub releases: SHA/tag y rangos cuando son verificables; edits y tag moves conservan incertidumbre.
+- Diagnósticos, heartbeats, métricas y exportaciones protegidas. OpenAPI 0.3 para dashboard independiente.
 
-## Verificación
+## Verificado mediante CI
 
-GitHub Actions instala dependencias con npm ci y package-lock, comprueba tipado estricto, ejecuta migraciones repetidamente sobre PostgreSQL 16 de prueba, corre pruebas automatizadas de seguridad/integridad/concurrencia y compila. Esto **no** certifica un funcionamiento real con Discord/GitHub.
+Node 22, npm ci, TypeScript estricto, PostgreSQL 16 de pruebas, 13 migraciones repetidas, simuladores de Discord/GitHub, pruebas de concurrencia, integridad de compromisos, importaciones huérfanas, acceso ADMIN, CSRF y módulos financieros. Consultar el enlace de CI del último commit y su reporte real; una CI verde no representa una prueba en el servidor Discord privado.
 
-## Funcionalidad incompleta
+## Pendiente de validación real
 
-- Cobertura histórica exhaustiva: los hilos inaccesibles, mensajes previamente borrados, archivos privados, limitaciones de permisos y marcadores temporales pueden causar resultados parciales.
-- Pruebas de integración productiva: OAuth real, permisos reales, indexación real y envío a Discord/GitHub controlado.
-- Reconciliación automatizada sin falsos positivos en todos los casos externos (se mantiene revisión humana).
-- Vinculación exacta del rango de SHAs de cada release con sus resúmenes de desarrollo.
-- Editor avanzado de anuncios y componentes, edición/cancelación integral e historial detallado.
-- Sincronización de guías con foros, gestión completa de Billing y personal, y sistema genérico de reglas de automatización.
-- Separación adicional de rutas de http.ts, contrato OpenAPI completo por recurso y política de retención.
-- Observabilidad, análisis estático y pruebas de carga más completos.
+- Discord OAuth2 real, token rotado, GuildForum con tags, permisos reales por canal, captura manual limitada, envío controlado y recuperación ante rate limits.
+- Indexación de historia completa: archivos inaccesibles, hilos privados, fechas idénticas de archivos, movimientos de hilos, ediciones fuera de orden y borrados previos.
+- Enlace/tag GitHub ante force push, repos renombrados y comparaciones truncadas imposibles; relación entre todas las releases históricas.
+- Manual ADMIN de ediciones remotas de guías, ampliar historial de cambios del editor de anuncios, cancelación/coordinación de algunas automatizaciones ya en ejecución.
+- Verificación externa de diseños de embeds (preview API JSON, no reproducción pixel-perfect del cliente Discord).
+- Política de retención y limpieza de registros sensibles, observabilidad bajo carga, permisos mínimos del bot, backups restaurables y plan de rollback.
+- La V1 requiere todavía ensayos operativos controlados autorizados, pruebas de seguridad independientes y aceptación funcional.
 
-## Fuentes de continuidad
+## Archivos y documentación
 
-Consultar docs/ARCHITECTURE.md, docs/SEGURIDAD.md, docs/GITHUB-INTEGRATION.md, docs/INDEXACION.md, docs/RECUPERACION.md, docs/MIGRACIONES.md y docs/CIERRE-MISION-2026-10-12.md.
+docs/ARCHITECTURE.md, docs/INDEXACION.md, docs/RECUPERACION.md, docs/GITHUB-INTEGRATION.md, docs/SEGURIDAD.md, docs/DEPLOY.md, docs/MIGRACIONES.md y docs/CIERRE-MISION-0.3.0.md.
 
-## Migración
-
-Hay ocho migraciones versionadas. No alterar las aplicadas ni ejecutar contra la BD productiva sin backup, pruebas de staging y autorización específica.
+En producción no se aplicaron migraciones, no se activó captura y no se publicó ningún mensaje.
