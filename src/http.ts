@@ -23,6 +23,7 @@ import { registerGuideRoutes } from "./admin-guides.js";
 import { registerBillingRoutes } from "./admin-billing.js";
 import { registerAutomationRoutes } from "./automations.js";
 import { registerGitHubReadRoutes } from "./github-routes.js";
+import { registerObservabilityRoutes } from "./observability.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -186,6 +187,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   await registerBillingRoutes(app,db,config);
   await registerAutomationRoutes(app,db,config);
   await registerGitHubReadRoutes(app,db,config);
+  await registerObservabilityRoutes(app,db,config,discord);
 
   app.post("/api/v1/github/sources/:id/sync",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});
@@ -218,12 +220,6 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
     await requireUser(req,db,config,{admin:true});
     const q=query(page,req.query);
     return {items:(await db.query("SELECT id,actor_id,action,target_kind,target_id,meta,occurred_at FROM audit_events ORDER BY id DESC LIMIT $1 OFFSET $2",[q.limit,q.offset])).rows,...q};
-  });
-  app.get("/api/v1/stats",async(req)=>{
-    const actor=await requireUser(req,db,config);
-    const allowed=await visibleDepartments(config,actor);
-    const reports=await db.query("SELECT department,count(*)::int AS total FROM reports WHERE department=ANY($1::text[]) GROUP BY department",[allowed]);
-    return {reports:reports.rows,source:"database",completeFor:"persisted_reports_only"};
   });
   // Encapsulated raw request body avoids relying on reserialized JSON for HMAC verification.
   await app.register(async sub=>{

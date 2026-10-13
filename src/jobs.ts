@@ -70,14 +70,25 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       await runImportBatch(db,config,id);
     }else if(job.kind==="report_publish"){
       const id=String(job.payload.reportId??"");
-      const rows=await db.query<{department:DepartmentKey;discord_channel_id:string;title:string;description:string;tags:string[];discord_message_id:string|null;publication_status:string}>(
-        "SELECT department,discord_channel_id,title,description,tags,discord_message_id,publication_status FROM reports WHERE id=$1",[id]);
+      const rows=await db.query<{department:DepartmentKey;discord_channel_id:string;title:string;description:string;tags:string[];discord_message_id:string|null;publication_status:string;source:string;project:string|null}>(
+        "SELECT department,source,project,discord_channel_id,title,description,tags,discord_message_id,publication_status FROM reports WHERE id=$1",[id]);
       const report=rows.rows[0];
       if(!report)throw new Error("Report no longer exists");
       if(report.discord_message_id){
-        await db.query("UPDATE automation_jobs SET status='done',completed_at=now() WHERE id=$1",[job.id]);
-        await completeAttempt(db,job,"done");
+        await transaction(db,async c=>{
+          await confirmGithubPublication(c,id);
+          await c.query("UPDATE automation_jobs SET status='done',completed_at=now() WHERE id=$1",[job.id]);
+          await c.query("UPDATE job_attempts SET ended_at=now(),outcome='done' WHERE job_id=$1 AND attempt=$2",[job.id,job.attempts]);
+        });
         return true;
+      }
+      if(report.source==="github" && report.project){
+        const control=await db.query<{enabled:boolean;push_enabled:boolean;release_enabled:boolean}>(
+          "SELECT enabled,push_enabled,release_enabled FROM github_sources WHERE repository=$1",[report.project]);
+        const enabled=control.rows[0];
+        const release=String(report.title).startsWith("RELEASE /");
+        if(!enabled?.enabled || (release?!enabled.release_enabled:!enabled.push_enabled))
+          throw new Error("GitHub integration disabled before queued publication");
       }
       const destinationId=DEPARTMENTS[report.department]?.destination;
       if(!destinationId || destinationId!==report.discord_channel_id)throw new Error("Unapproved destination");
@@ -182,10 +193,15 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
     await completeAttempt(db,job,"done");
   }catch(e){
     const err=safeMessage(e);
+    if(job.kind==="report_publish" && remoteStarted){
+      const settled=await db.query<{status:string}>(
+        "SELECT status FROM automation_jobs WHERE id=$1",[job.id]).catch(()=>null);
+      if(settled?.rows[0]?.status==="done")return true;
+    }
     // Once a remote call starts, even an HTTP error may mean an accepted Discord write.
     const status=remoteStarted?"needs_reconciliation":job.attempts<3?"queued":"failed";
     const delay=Math.min(300,10*(2**Math.min(5,job.attempts)));
-    await db.query("UPDATE automation_jobs SET status=$2,last_error=$3,updated_at=now(),run_at=now()+($4::int*interval '1 second') WHERE id=$1",
+    await db.query("UPDATE automation_jobs SET status=$2,last_error=$3,updated_at=now(),run_at=now()+($4::int*interval '1 second') WHERE id=$1 AND status='running'",
       [job.id,status,err,delay]);
     if(job.kind==="automation_rule")await db.query(
       "UPDATE automation_definitions SET last_error=$2 WHERE id=$1",
@@ -199,18 +215,28 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       "UPDATE announcements SET status='failed',last_error='Remote publication may have succeeded' WHERE id=$1 AND status='publishing'",
       [job.payload.id]);
     if(job.kind==="report_publish" && remoteStarted)await db.query(
-      "UPDATE reports SET publication_status='needs_reconciliation',sync_state='unknown',updated_at=now() WHERE id=$1",[job.payload.reportId]);
+      "UPDATE reports SET publication_status='needs_reconciliation',sync_state='unknown',updated_at=now() WHERE id=$1 AND publication_status='publishing'",[job.payload.reportId]);
     await completeAttempt(db,job,status,err);
   }
   return true;
 }
 export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
   let closing=false,processing=false;
+  const heartbeat=async(component:string,state:string,detail:string|null=null)=>{
+    await db.query("INSERT INTO worker_heartbeats(component,last_seen_at,state,detail,last_job_at) "+
+      "VALUES($1,now(),$2,$3,now()) ON CONFLICT(component) DO UPDATE SET "+
+      "last_seen_at=now(),state=EXCLUDED.state,detail=EXCLUDED.detail,last_job_at=now(),updated_at=now()",
+      [component,state,detail]).catch(()=>undefined);
+  };
   const loop=async()=>{
     if(closing||processing||!discord.isReady())return;
     processing=true;
-    try{for(let i=0;i<10&&!closing;i++)if(!await runOneJob(db,discord,config))break;}
-    catch(e){console.error("worker_failed",safeMessage(e));}
+    try{
+      await heartbeat("jobs","working");
+      for(let i=0;i<10&&!closing;i++)if(!await runOneJob(db,discord,config))break;
+      await heartbeat("jobs","idle");
+    }
+    catch(e){console.error("worker_failed",safeMessage(e));await heartbeat("jobs","degraded",safeMessage(e));}
     finally{processing=false;}
   };
   void recoverOrphanedImports(db).catch(e=>console.error("import_recovery_failed",safeMessage(e)));
@@ -228,6 +254,7 @@ export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
         "WHERE kind='history_import' AND status='running' AND locked_at<now()-interval '30 minutes'");
       await recoverOrphanedImports(db);
       await scheduleDueAutomations(db);
+      await heartbeat("sweep","idle");
       if(config.GITHUB_POLL_ENABLED){
         const rows=await db.query<{repository:string;release_enabled:boolean;push_enabled:boolean}>(
           "SELECT repository,release_enabled,push_enabled FROM github_sources WHERE enabled AND (release_enabled OR push_enabled)");
