@@ -22,6 +22,7 @@ import { registerAnnouncementRoutes } from "./admin-announcements.js";
 import { registerGuideRoutes } from "./admin-guides.js";
 import { registerBillingRoutes } from "./admin-billing.js";
 import { registerAutomationRoutes } from "./automations.js";
+import { registerGitHubReadRoutes } from "./github-routes.js";
 
 const departmentSchema=z.enum(Object.keys(DEPARTMENTS) as [DepartmentKey,...DepartmentKey[]]);
 const text=z.string().trim().min(1);
@@ -184,6 +185,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   await registerGuideRoutes(app,db,config,discord);
   await registerBillingRoutes(app,db,config);
   await registerAutomationRoutes(app,db,config);
+  await registerGitHubReadRoutes(app,db,config);
 
   app.post("/api/v1/github/sources/:id/sync",async(req)=>{
     const actor=await requireUser(req,db,config,{admin:true,mutation:true});

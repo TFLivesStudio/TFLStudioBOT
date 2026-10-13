@@ -11,6 +11,7 @@ import { captureStructure } from "./auditor.js";
 import { allocateGithubBatch,confirmGithubPublication } from "./github-batches.js";
 import { transaction } from "./db.js";
 import { executeConfiguredAutomation,scheduleDueAutomations } from "./automations.js";
+import { recordReleaseProvenance } from "./github-releases.js";
 
 type Job = {id:string;kind:string;payload:Record<string,unknown>;attempts:number};
 const safeMessage=(e:unknown) => e instanceof Error ? e.name.slice(0,40)+": "+e.message.slice(0,250) : "Unknown error";
@@ -126,12 +127,31 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       if(!config)throw new Error("GitHub release sync requires configuration");
       await fetchGithubRepository(db,config,String(job.payload.repo));
     }else if(job.kind==="github_release"){
+      if(!config)throw new Error("Release provenance requires configuration");
       const p=job.payload;
-      const version=String(p.tag??"unknown").slice(0,90);
-      const text="Versión: "+version+"\nTipo: "+(p.prerelease?"Prerelease":"Release")+(p.name?"\nNombre: "+String(p.name).slice(0,150):"")+"\nPublicada: "+String(p.date??"Fecha desconocida")+
-        "\nEnlace oficial: "+String(p.url??"")+"\n\nChangelog oficial:\n"+String(p.body??"Sin notas publicadas");
-      await createReport(db,discord,destination,"RELEASE / "+version,text.slice(0,1500),null,
-        "github_release:"+String(p.repo)+":"+String(p.releaseId));
+      const release={
+        repo:String(p.repo),releaseId:Number(p.releaseId),tag:String(p.tag),name:typeof p.name==="string"?p.name:undefined,
+        body:String(p.body??""),url:String(p.url??""),date:typeof p.date==="string"?p.date:undefined,
+        prerelease:!!p.prerelease,edited:!!p.edited
+      };
+      const key="github_release:"+release.repo+":"+release.releaseId;
+      let reportId:string|null=null;
+      const old=await db.query<{id:string}>("SELECT id FROM reports WHERE external_key=$1",[key]);
+      if(old.rows[0])reportId=old.rows[0].id;
+      if(!p.edited && !reportId){
+        const version=release.tag.slice(0,90);
+        const prefix="Versión: "+version+"\nTipo: "+(release.prerelease?"Prerelease":"Release")+
+          (release.name?"\nNombre: "+release.name.slice(0,150):"")+
+          "\nPublicada: "+(release.date??"Fecha no indicada")+"\nEnlace oficial: "+release.url+
+          "\n\nChangelog oficial:\n";
+        const limit=Math.max(0,1450-prefix.length-110);
+        const truncated=release.body.length>limit;
+        const notes=release.body.slice(0,limit);
+        const summary=prefix+notes+(truncated?"\n\nNotas abreviadas; consultar el enlace oficial para el contenido completo.":"");
+        const created=await createReport(db,discord,destination,"RELEASE / "+version,summary,null,key,[],release.repo);
+        reportId=created.id;
+      }
+      await recordReleaseProvenance(db,config,release,reportId);
     }else if(job.kind==="github_push_summary"){
       await allocateGithubBatch(db,String(job.payload.repo),destination);
     }else if(job.kind==="announcement"){

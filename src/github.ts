@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual,createHash } from "node:crypto";
 import type { DB } from "./db.js";
 import type { Config } from "./config.js";
 
@@ -56,7 +56,7 @@ export async function handleGithubEvent(db:DB,event:string,delivery:string,paylo
       await client.query("INSERT INTO automation_jobs(kind,payload,dedup_key,origin) VALUES('github_sync',$1,$2,'github_webhook') ON CONFLICT(dedup_key) DO NOTHING",
         [JSON.stringify({repo:repository}),"github_sync:"+delivery]);
     }
-    if(event==="release" && source.release_enabled && p.action==="published" && p.release && !p.release.draft &&
+    if(event==="release" && source.release_enabled && (p.action==="published" || p.action==="edited") && p.release && !p.release.draft &&
       (source.allow_prereleases || !p.release.prerelease)){
       const release=p.release;
       const url=new URL(release.html_url);
@@ -65,8 +65,8 @@ export async function handleGithubEvent(db:DB,event:string,delivery:string,paylo
       await client.query("INSERT INTO automation_jobs(kind,payload,dedup_key,origin) VALUES('github_release',$1,$2,'github_webhook') ON CONFLICT(dedup_key) DO NOTHING",
         [JSON.stringify({repo:repository,releaseId:release.id,tag:release.tag_name,
           name:release.name,body:release.body??"",url:release.html_url,date:release.published_at,
-          prerelease:!!release.prerelease,target:release.target_commitish}),
-          "release:"+repository+":"+release.id]);
+          prerelease:!!release.prerelease,target:release.target_commitish,edited:p.action==="edited"}),
+          p.action==="edited"?"release_edit:"+repository+":"+release.id+":"+delivery:"release:"+repository+":"+release.id]);
     }
     await client.query("COMMIT");
     return "accepted";
@@ -161,11 +161,17 @@ export async function fetchGithubRepository(db:DB,config:Config,repository:strin
       for(const release of releases){
         if(!release.published_at || new Date(release.published_at)<settings.enabled_at){finished=true;continue;}
         if(release.draft || (release.prerelease && !settings.allow_prereleases))continue;
+        const previous=await db.query<{official_notes:string;tag:string;title:string|null}>(
+          "SELECT official_notes,tag,title FROM github_release_records WHERE repository=$1 AND release_id=$2",
+          [repository,release.id]);
+        const existing=previous.rows[0];
+        const changed=!!(existing && (existing.official_notes!==release.body || existing.tag!==release.tag_name || existing.title!==release.name));
+        const suffix=createHash("sha256").update(release.tag_name+"\n"+release.name+"\n"+release.body).digest("hex").slice(0,20);
         const row=await db.query(
           "INSERT INTO automation_jobs(kind,payload,dedup_key,origin) VALUES('github_release',$1,$2,'github_poll') ON CONFLICT(dedup_key) DO NOTHING RETURNING id",
           [JSON.stringify({repo:repository,releaseId:release.id,tag:release.tag_name,name:release.name,body:release.body,
-            url:release.html_url,date:release.published_at,prerelease:release.prerelease,target:release.target_commitish}),
-          "release:"+repository+":"+release.id]);
+            url:release.html_url,date:release.published_at,prerelease:release.prerelease,target:release.target_commitish,edited:changed}),
+          changed?"release_edit:"+repository+":"+release.id+":"+suffix:"release:"+repository+":"+release.id]);
         if(row.rowCount)added++;
       }
       if(releases.length<100)finished=true;
