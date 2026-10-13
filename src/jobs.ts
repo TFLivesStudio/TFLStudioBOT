@@ -10,6 +10,7 @@ import { runImportBatch,recoverOrphanedImports } from "./report-import.js";
 import { captureStructure } from "./auditor.js";
 import { allocateGithubBatch,confirmGithubPublication } from "./github-batches.js";
 import { transaction } from "./db.js";
+import { executeConfiguredAutomation,scheduleDueAutomations } from "./automations.js";
 
 type Job = {id:string;kind:string;payload:Record<string,unknown>;attempts:number};
 const safeMessage=(e:unknown) => e instanceof Error ? e.name.slice(0,40)+": "+e.message.slice(0,250) : "Unknown error";
@@ -43,7 +44,9 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       if(!(sourceRow.department in DEPARTMENTS))throw new Error("Destination not configured");
       destination=sourceRow.department as DepartmentKey;
     }
-    if(job.kind==="auditor_snapshot"){
+    if(job.kind==="automation_rule"){
+      await executeConfiguredAutomation(db,config,job.id,job.payload);
+    }else if(job.kind==="auditor_snapshot"){
       if(!config)throw new Error("Auditor requires configuration");
       const id=String(job.payload.snapshotId);
       const selected=await db.query<{options:{includeArchived?:boolean;maxArchivedPerForum?:number};status:string}>(
@@ -164,6 +167,9 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
     const delay=Math.min(300,10*(2**Math.min(5,job.attempts)));
     await db.query("UPDATE automation_jobs SET status=$2,last_error=$3,updated_at=now(),run_at=now()+($4::int*interval '1 second') WHERE id=$1",
       [job.id,status,err,delay]);
+    if(job.kind==="automation_rule")await db.query(
+      "UPDATE automation_definitions SET last_error=$2 WHERE id=$1",
+      [job.payload.ruleId,err]);
     if(job.kind==="auditor_snapshot")await db.query(
       "UPDATE audit_snapshots SET status=$2,error=$3 WHERE id=$1",[job.payload.snapshotId,status==="queued"?"queued":"failed",err]);
     if(job.kind==="guide_publish" && remoteStarted)await db.query(
@@ -188,6 +194,7 @@ export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
     finally{processing=false;}
   };
   void recoverOrphanedImports(db).catch(e=>console.error("import_recovery_failed",safeMessage(e)));
+  void scheduleDueAutomations(db).catch(e=>console.error("automation_schedule_failed",safeMessage(e)));
   const interval=setInterval(()=>void loop(),10000);
   void loop();
   const sweep=setInterval(async()=>{
@@ -200,6 +207,7 @@ export function launchWorker(db:DB,discord:Client,config:Config):()=>void{
       await db.query("UPDATE automation_jobs SET status='failed',last_error='Expired import worker lease' "+
         "WHERE kind='history_import' AND status='running' AND locked_at<now()-interval '30 minutes'");
       await recoverOrphanedImports(db);
+      await scheduleDueAutomations(db);
       if(config.GITHUB_POLL_ENABLED){
         const rows=await db.query<{repository:string;release_enabled:boolean;push_enabled:boolean}>(
           "SELECT repository,release_enabled,push_enabled FROM github_sources WHERE enabled AND (release_enabled OR push_enabled)");

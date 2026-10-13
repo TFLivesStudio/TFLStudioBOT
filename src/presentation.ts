@@ -49,7 +49,7 @@ export async function postAnnouncement(client:Client,channelId:string,title:stri
     if(e.url)embed.setURL(e.url);
     if(e.image)embed.setImage(e.image);
     if(e.thumbnail)embed.setThumbnail(e.thumbnail);
-    if(e.author)embed.setAuthor({name:e.author.name,...(e.author.url?{url:e.author.url}:{}),...(e.author.iconUrl?{iconURL:e.author.iconUrl}:{})});
+    if(e.author)embed.setAuthor({name:e.author.name,url:e.author.url,iconURL:e.author.iconUrl});
     if(e.footer)embed.setFooter({text:e.footer});
     if(e.fields.length)embed.addFields(...e.fields);
     return embed;
