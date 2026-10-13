@@ -17,3 +17,8 @@ TFLivesStudio/TFLClient permanece desactivado por defecto. No configurar webhook
 ## Solapamiento
 
 Las releases conservan sus changelogs oficiales; los commits conservan sus propias referencias. No se descartan registros por similitud textual. La vinculación exhaustiva entre tags y SHAs de cada release sigue pendiente. Nunca prometer exactamente una publicación ante fallos arbitrarios de sistemas externos.
+
+
+## Brechas de cobertura
+
+La primera línea base puede omitir historia anterior; la fuente guarda coverage_gap de forma persistente. También se conserva un aviso si un push inicial no ofrece base verificable. ADMIN puede reconocer esta advertencia por API con una razón registrada, pero nunca se rellena historia no observada. Los errores transitorios se guardan aparte en last_sync_error.

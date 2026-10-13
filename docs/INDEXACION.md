@@ -13,3 +13,8 @@ Eventos: messageCreate, messageUpdate, messageDelete, threadCreate y threadUpdat
 La API ADMIN ofrece fuentes, progreso, inicio, cancelación y reanudación. El modo dry-run predeterminado registra contadores pero no escribe reportes. Los canales de texto se paginan por message ID; los foros recorren hilos activos y archivados públicos accesibles. Los checkpoints permiten reinicios y las claves únicas reducen duplicados.
 
 Los fallos de permisos, el contenido no disponible y los archivos privados no se reemplazan por valores inventados. El resultado debe presentarse como parcial si no se pudo recorrer todo el alcance. La cancelación es cooperativa entre lotes. Las marcas de tiempo iguales en páginas archivadas pueden necesitar una verificación posterior. No se descargan archivos adjuntos indiscriminadamente.
+
+
+## Cobertura del dashboard
+
+GET /api/v1/report-index/coverage (solo ADMIN) devuelve por fuente: cantidad de registros guardados, cuerpos no disponibles, fecha de índice y último proceso histórico. Declara observed_only_or_partial. Los filtros de reportes admiten departamento, proyecto, fuente y rango de fechas; no prometen censos completos de Discord.

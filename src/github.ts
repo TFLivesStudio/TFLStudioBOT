@@ -51,7 +51,7 @@ export async function handleGithubEvent(db:DB,event:string,delivery:string,paylo
       if(isSha(p.before)){
         await client.query("UPDATE github_sources SET last_commit_sha=$2 WHERE id=$1 AND last_commit_sha IS NULL",[source.id,p.before]);
       }else{
-        await client.query("UPDATE github_sources SET last_sync_error='Push has no valid base SHA: manual baseline needed' WHERE id=$1 AND last_commit_sha IS NULL",[source.id]);
+        await client.query("UPDATE github_sources SET last_sync_error='Push has no valid base SHA: manual baseline needed',coverage_gap='Unverifiable initial push: first commits may be missing' WHERE id=$1 AND last_commit_sha IS NULL",[source.id]);
       }
       await client.query("INSERT INTO automation_jobs(kind,payload,dedup_key,origin) VALUES('github_sync',$1,$2,'github_webhook') ON CONFLICT(dedup_key) DO NOTHING",
         [JSON.stringify({repo:repository}),"github_sync:"+delivery]);
@@ -110,7 +110,7 @@ export async function pollGithubCommits(db:DB,config:Config,repository:string):P
     const current=branch.commit.sha;
     if(!isSha(current))throw new Error("Invalid GitHub branch SHA");
     if(!source.last_commit_sha){
-      await db.query("UPDATE github_sources SET last_commit_sha=$2,last_sync_at=now(),last_sync_error=NULL WHERE id=$1 AND last_commit_sha IS NULL",
+      await db.query("UPDATE github_sources SET last_commit_sha=$2,last_sync_at=now(),last_sync_error=NULL,coverage_gap=COALESCE(coverage_gap,'Initial cursor established without historical backfill') WHERE id=$1 AND last_commit_sha IS NULL",
         [source.id,current]);
       return 0; // First activation establishes baseline without bulk backfill.
     }

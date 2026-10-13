@@ -8,6 +8,8 @@
 | 004_outbox_and_report_index.sql | Outbox, intentos y fuentes/importaciones |
 | 005_github_integrity.sql | Rama, prereleases y seguimiento de sincronización |
 | 006_auditor_snapshots.sql | Inventarios estructurales protegidos |
+| 007_report_cancelled.sql | Cancelación explícita de reportes pendientes |
+| 008_coverage_and_projects.sql | Brechas de sincronización y clasificación de proyectos |
 
 El migrador usa transacciones y advisory lock y registra cada archivo aplicado. No modificar scripts históricos; añadir nuevas migraciones. GitHub Actions ejecuta migraciones dos veces sobre PostgreSQL 16 de prueba y valida idempotencia.
 

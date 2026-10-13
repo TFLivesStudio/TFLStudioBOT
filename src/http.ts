@@ -65,20 +65,20 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
   });
   app.get("/api/v1/reports",async(req)=>{
     const actor=await requireUser(req,db,config);
-    const q=query(page.extend({department:departmentSchema.optional(),search:z.string().max(120).optional()}),req.query);
+    const q=query(page.extend({department:departmentSchema.optional(),search:z.string().max(120).optional(),project:z.string().max(80).optional(),source:z.enum(["bot","github","discord_manual","manual"]).optional(),from:z.string().datetime().optional(),to:z.string().datetime().optional()}),req.query);
     const allowed=await visibleDepartments(config,actor);
     if(q.department && !allowed.includes(q.department)) throw Object.assign(new Error("Forbidden"),{statusCode:403});
     const selected=q.department?[q.department]:allowed;
-    const result=await db.query("SELECT id,department,source,title,description,created_by,discord_channel_id,discord_message_id,discord_thread_id,created_at FROM reports WHERE department=ANY($1::text[]) AND ($2::text IS NULL OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%') ORDER BY created_at DESC LIMIT $3 OFFSET $4",[selected,q.search??null,q.limit,q.offset]);
+    const result=await db.query("SELECT id,department,project,source,title,description,created_by,discord_channel_id,discord_message_id,discord_thread_id,content_state,sync_state,created_at FROM reports WHERE department=ANY($1::text[]) AND ($2::text IS NULL OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%') AND ($5::text IS NULL OR project=$5) AND ($6::text IS NULL OR source=$6) AND ($7::timestamptz IS NULL OR occurred_at >=$7) AND ($8::timestamptz IS NULL OR occurred_at <=$8) ORDER BY occurred_at DESC LIMIT $3 OFFSET $4",[selected,q.search??null,q.limit,q.offset,q.project??null,q.source??null,q.from??null,q.to??null]);
     return {items:result.rows,limit:q.limit,offset:q.offset};
   });
   app.post("/api/v1/reports",async(req)=>{
     const actor=await requireUser(req,db,config,{mutation:true});
-    const input=query(z.object({department:departmentSchema,title:text.max(100),description:text.max(1500)}),req.body);
+    const input=query(z.object({department:departmentSchema,title:text.max(100),description:text.max(1500),project:z.string().trim().max(80).nullable().default(null)}),req.body);
     if(!await canUseChannel(config,actor,input.department,"write")) throw Object.assign(new Error("Forbidden"),{statusCode:403});
     const key=req.headers["idempotency-key"];
     if(typeof key!=="string" || !/^[\w-]{8,128}$/.test(key)) throw Object.assign(new Error("Idempotency-Key header required"),{statusCode:400});
-    const result=await createReport(db,discord,input.department,input.title,input.description,actor.userId,"api:"+actor.userId+":"+key);
+    const result=await createReport(db,discord,input.department,input.title,input.description,actor.userId,"api:"+actor.userId+":"+key,[],input.project);
     await audit(db,"report.create",actor.userId,"report",result.id,{department:input.department});
     return result;
   });
@@ -282,6 +282,7 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
         default_branch=COALESCE($6,default_branch),
         last_commit_sha=CASE WHEN $6 IS NOT NULL AND $6<>default_branch THEN NULL ELSE last_commit_sha END,
         allow_prereleases=COALESCE($7,allow_prereleases),
+        coverage_gap=CASE WHEN $6 IS NOT NULL AND $6<>default_branch THEN 'Branch changed: initial sync establishes new cursor' ELSE coverage_gap END,
         enabled_at=CASE WHEN enabled=false AND $2=true THEN now() ELSE enabled_at END
         WHERE id=$1 RETURNING id`,[id,d.enabled,d.pushEnabled,d.releaseEnabled,d.batchMinutes,d.defaultBranch??null,d.allowPrereleases??null]);
     if(!result.rowCount) throw Object.assign(new Error("Source not found"),{statusCode:404});
@@ -308,6 +309,16 @@ export async function createHttp(config:Config,db:DB,discord:Client):Promise<Fas
       [kind,JSON.stringify({repo:data.repository})]);
     await audit(db,"github.sync.request",actor.userId,"github_source",String(id),{jobs});
     return {queued:jobs};
+  });
+
+  app.post("/api/v1/github/sources/:id/coverage/acknowledge",async(req)=>{
+    const actor=await requireUser(req,db,config,{admin:true,mutation:true});
+    const id=query(z.object({id:idSchema}),req.params).id;
+    const data=query(z.object({reason:z.string().trim().min(20).max(500)}),req.body);
+    const result=await db.query("UPDATE github_sources SET coverage_gap=NULL WHERE id=$1 AND coverage_gap IS NOT NULL RETURNING id",[id]);
+    if(!result.rowCount)throw Object.assign(new Error("No coverage gap to acknowledge"),{statusCode:409});
+    await audit(db,"github.coverage.ack",actor.userId,"github_source",String(id),{reason:data.reason});
+    return {ok:true};
   });
   app.get("/api/v1/audit",async(req)=>{
     await requireUser(req,db,config,{admin:true});

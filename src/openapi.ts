@@ -7,7 +7,7 @@ const id = {type:"string",pattern:"^[0-9]{17,20}$"};
 const object = (properties:Record<string,unknown>,required:string[]=[]) => ({type:"object",properties,required,additionalProperties:false});
 const schemas={
   Error:object({error:object({code:string(),message:string()},["code","message"])},["error"]),
-  ManualReport:object({department:string(),title:string(100),description:string(1500)},["department","title","description"]),
+  ManualReport:object({department:string(),title:string(100),description:string(1500),project:string(80)},["department","title","description"]),
   Publication:object({project:string(120),platform:string(70),url:{type:"string",format:"uri"},publishedAt:date,notes:string(2000)},["project","platform","url","publishedAt"]),
   Guide:object({category:string(100),title:string(160),body:string(15000),visibilityDepartment:{anyOf:[string(),{type:"null"}]},discordThreadId:{anyOf:[id,{type:"null"}]}},["category","title","body"]),
   GuideUpdate:object({expectedVersion:integer,category:string(100),title:string(160),body:string(15000),visibilityDepartment:{anyOf:[string(),{type:"null"}]}},["expectedVersion","category","title","body","visibilityDepartment"]),
@@ -67,10 +67,10 @@ const endpointList:[string,string[]][]=[
   ["/api/v1/billing/subscriptions",["get","post"]],["/api/v1/billing/subscriptions/{id}",["patch"]],
   ["/api/v1/announcements",["get","post"]],["/api/v1/announcements/{id}/schedule",["post"]],
   ["/api/v1/announcements/{id}/preview",["get"]],["/api/v1/announcements/templates",["get","post"]],
-  ["/api/v1/github/sources",["get","post"]],["/api/v1/github/sources/{id}",["patch"]],["/api/v1/github/sources/{id}/sync",["post"]],
+  ["/api/v1/github/sources",["get","post"]],["/api/v1/github/sources/{id}",["patch"]],["/api/v1/github/sources/{id}/sync",["post"]],["/api/v1/github/sources/{id}/coverage/acknowledge",["post"]],
   ["/api/v1/jobs",["get"]],["/api/v1/jobs/{id}",["get"]],
   ["/api/v1/jobs/{id}/reconcile",["post"]],["/api/v1/jobs/{id}/cancel",["post"]],
-  ["/api/v1/report-index/sources",["get"]],["/api/v1/report-index/sources/{id}",["patch"]],
+  ["/api/v1/report-index/coverage",["get"]],["/api/v1/report-index/sources",["get"]],["/api/v1/report-index/sources/{id}",["patch"]],
   ["/api/v1/report-index/imports",["get","post"]],["/api/v1/report-index/imports/{id}",["get"]],
   ["/api/v1/report-index/imports/{id}/resume",["post"]],["/api/v1/report-index/imports/{id}/cancel",["post"]],
   ["/api/v1/auditor/snapshots",["get","post"]],["/api/v1/auditor/snapshots/{id}",["get"]],

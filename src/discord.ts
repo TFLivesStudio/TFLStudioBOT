@@ -51,7 +51,7 @@ export function buildDiscord(config: Config, db: DB): Client {
         if (!allowed) { await interaction.editReply("No tienes autorización para publicar en este departamento."); return; }
         const title = interaction.options.getString("titulo", true);
         const description = interaction.options.getString("descripcion", true);
-        const record = await createReport(db, client, key, title, description, interaction.user.id, "discord:" + interaction.id);
+        const record = await createReport(db, client, key, title, description, interaction.user.id, "discord:" + interaction.id, [], interaction.options.getString("proyecto"));
         await interaction.editReply(record.url ? "Reporte publicado: " + record.url : "Reporte ST-"+record.id+" registrado. Publicación en cola; puedes consultar su estado desde la API.");
       }
     } catch (e) {
@@ -72,6 +72,7 @@ export async function registerCommands(config: Config): Promise<void> {
       .addStringOption(o => o.setName("departamento").setDescription("Departamento destino").setRequired(true).addChoices(...choices))
       .addStringOption(o => o.setName("titulo").setDescription("Título del reporte").setMinLength(3).setMaxLength(100).setRequired(true))
       .addStringOption(o => o.setName("descripcion").setDescription("Descripción").setMinLength(3).setMaxLength(1500).setRequired(true))
+      .addStringOption(o => o.setName("proyecto").setDescription("Proyecto (opcional)").setMaxLength(80))
   ];
   const rest = new REST({ version: "10" }).setToken(config.BOT_TOKEN);
   await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID), { body: commands.map(x => x.toJSON()) });

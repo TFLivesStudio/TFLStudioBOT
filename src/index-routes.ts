@@ -28,6 +28,19 @@ export async function registerIndexRoutes(app:FastifyInstance,db:DB,config:Confi
     await audit(db,"report_index.source.configure",actor.userId,"report_index_source",String(id),data);
     return {ok:true};
   });
+
+  app.get("/api/v1/report-index/coverage",async(req)=>{
+    await requireUser(req,db,config,{admin:true});
+    const result=await db.query(
+      "SELECT s.id,s.department,s.channel_id,s.enabled,s.capture_content,s.historical_enabled,"+
+      "(SELECT count(*)::int FROM reports r WHERE r.discord_channel_id=s.channel_id) AS indexed_reports,"+
+      "(SELECT count(*)::int FROM reports r WHERE r.discord_channel_id=s.channel_id AND r.content_state<>'available') AS unavailable_bodies,"+
+      "(SELECT max(r.indexed_at) FROM reports r WHERE r.discord_channel_id=s.channel_id) AS last_indexed_at,"+
+      "(SELECT jsonb_build_object('status',i.status,'processed',i.processed,'inserted',i.inserted,'errors',i.errors,'dryRun',i.dry_run,'phase',i.phase) "+
+      "FROM report_import_runs i WHERE i.source_id=s.id ORDER BY i.id DESC LIMIT 1) AS last_import "+
+      "FROM report_index_sources s ORDER BY s.department");
+    return {items:result.rows,coverage:"observed_only_or_partial",note:"Stored counts are not verified totals of the Discord server"};
+  });
   app.get("/api/v1/report-index/imports",async(req)=>{
     await requireUser(req,db,config,{admin:true});
     const q=pager.parse(req.query);
