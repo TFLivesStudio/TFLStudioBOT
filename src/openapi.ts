@@ -100,7 +100,7 @@ const operation=(path:string,method:string)=>{
 };
 export const OPENAPI={
   openapi:"3.1.0",
-  info:{title:"TFL Studio Core API",version:"0.1.0",description:"Private API for separate dashboard clients. OAuth2 handled by backend; same-site session cookie and stable CSRF header for mutations; response fields evolve within API version. Restricted endpoints enforce current Discord membership and permissions."},
+  info:{title:"TFL Studio Core API",version:"0.2.0",description:"Private API for separate dashboard clients. OAuth2 handled by backend; same-site session cookie and stable CSRF header for mutations; response fields evolve within API version. Restricted endpoints enforce current Discord membership and permissions."},
   servers:[{url:"/"}],
   components:{securitySchemes:{session:{type:"apiKey",in:"cookie",name:"tfl_studio_session"}},schemas},
   paths:Object.fromEntries(endpointList.map(([path,methods])=>[path,Object.fromEntries(methods.map(method=>[method,operation(path,method)]))]))

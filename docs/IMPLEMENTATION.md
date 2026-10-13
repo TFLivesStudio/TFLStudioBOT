@@ -1,39 +1,37 @@
-# TFL STUDIO / NOTAS DE IMPLEMENTACIÓN
+# TFL STUDIO CORE / ESTADO DE IMPLEMENTACIÓN
 
-## Alcance de la primera entrega
+**Versión:** 0.2.0 en desarrollo. No es la V1 final ni está desplegada en producción.
 
-**CI (GitHub Actions) verificada:** TypeScript, pruebas unitarias incluidas y build en verde. No equivale a pruebas contra Discord real, webhook real ni PostgreSQL de producción.
+## Implementación existente
 
-**Operativo a nivel de implementación:** arranque, configuración, esquema transaccional, OAuth, roles vivos, API para datos administrativos, publicación por canal/foro, jobs, GitHub firmado, registro de cambios. Las integraciones reales no han sido ejecutadas.
+- Autorización compartida entre comandos y API, incluyendo permisos efectivos de canales y rol ADMIN.
+- OAuth2, sesiones HttpOnly, token CSRF estable por sesión y verificación actual de membresía.
+- Reportes manuales con outbox, deduplicación y conciliación de operaciones ambiguas.
+- Captura opt-in de reportes de canales y foros; importación histórica por lotes con dry-run, checkpoints y estado visible.
+- Integraciones GitHub mediante HMAC, ramas configurables, comparaciones paginadas, cursor transaccional y releases separadas.
+- Guías versionadas, registros de publicidad, anuncios básicos programados, asignaciones ADMIN y registros Billing.
+- Auditor estructural ampliado, snapshots privados, descargas y comparación de inventarios.
+- API versionada para el futuro dashboard independiente, documentada parcialmente mediante OpenAPI.
 
-**Pendiente:** importación/indexación de publicaciones históricas, editor visual de embeds y componentes avanzados, plantillas reutilizables, ediciones versionadas de guías, dashboard, pruebas de integración contra Discord/GitHub, métricas completas, observabilidad extendida.
+## Verificación
 
-## Política de migración
+GitHub Actions instala dependencias con npm ci y package-lock, comprueba tipado estricto, ejecuta migraciones repetidamente sobre PostgreSQL 16 de prueba, corre pruebas automatizadas de seguridad/integridad/concurrencia y compila. Esto **no** certifica un funcionamiento real con Discord/GitHub.
 
-Migraciones en `migrations/`, aplicadas transaccionalmente por `npm run migrate`. Mantener backups del PostgreSQL y una reversión supervisada para futuros cambios. No ejecutar migraciones sobre producción sin backup.
+## Funcionalidad incompleta
 
-## Autorización
+- Cobertura histórica exhaustiva: los hilos inaccesibles, mensajes previamente borrados, archivos privados, limitaciones de permisos y marcadores temporales pueden causar resultados parciales.
+- Pruebas de integración productiva: OAuth real, permisos reales, indexación real y envío a Discord/GitHub controlado.
+- Reconciliación automatizada sin falsos positivos en todos los casos externos (se mantiene revisión humana).
+- Vinculación exacta del rango de SHAs de cada release con sus resúmenes de desarrollo.
+- Editor avanzado de anuncios y componentes, edición/cancelación integral e historial detallado.
+- Sincronización de guías con foros, gestión completa de Billing y personal, y sistema genérico de reglas de automatización.
+- Separación adicional de rutas de http.ts, contrato OpenAPI completo por recurso y política de retención.
+- Observabilidad, análisis estático y pruebas de carga más completos.
 
-`ADMIN` = `1282541815802892289`. Ámbitos no administrativos vinculados a roles reales (Minecraft, Websites, Hosting, Publicidad, etc.); la asignación interna en BD **no concede** un rol de Discord. El proceso nativo de aprobación humana es externo y se conserva.
+## Fuentes de continuidad
 
-## Datos y privacidad
+Consultar docs/ARCHITECTURE.md, docs/SEGURIDAD.md, docs/GITHUB-INTEGRATION.md, docs/INDEXACION.md, docs/RECUPERACION.md, docs/MIGRACIONES.md y docs/CIERRE-MISION-2026-10-12.md.
 
-Tablas: `sessions`, `audit_events`, `reports`, `publication_records`, `guides`, `announcements`, `staff_assignments`, `billing_records`, `github_sources`, `github_commits`, `webhook_deliveries`, `automation_jobs`. Respaldos, retención de eventos, derecho de eliminación y políticas de acceso deben definirse antes del tratamiento de datos reales.
+## Migración
 
-## Publicación GitHub
-
-`github_push_summary`: ventana configurable, máximo 25 commits por reporte, evita generar un mensaje por commit. `github_release`: evento independiente, publicación al siguiente ciclo de workers. Los jobs interrumpidos y fallos en publicaciones pueden pasar a `needs_reconciliation` para evitar reintentos inseguros.
-
-## Deuda técnica explícita
-
-1. Reconciliación manual automatizable de mensajes Discord ante fallo parcial.
-2. Pruebas de combinaciones complejas de permisos en canales/foros y gestión de rate limits de autorización.
-3. Índice de histórico desde canales y foros y esquema de cobertura `completo/parcial/desconocido`.
-4. Manejo de paginación de comparaciones GitHub de más de 100 commits y reintentos de polling.
-5. OpenAPI ampliado con request/response schemas y ejemplos.
-6. Pruebas con PostgreSQL/Discord simulados y validación de build/TypeScript.
-
-
-## Actualización de consolidación (2026-10-12)
-
-Se implementaron outbox, indexación autorizada, importación por lotes, reconciliación ADMIN, HMAC-CSRF estable, sincronización GitHub paginada y auditoría estructural ampliada. La cobertura real de Discord y las funciones restantes se detallan en docs/CIERRE-MISION-2026-10-12.md. No se han desplegado ni activado componentes de producción.
+Hay ocho migraciones versionadas. No alterar las aplicadas ni ejecutar contra la BD productiva sin backup, pruebas de staging y autorización específica.
