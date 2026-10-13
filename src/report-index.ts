@@ -47,13 +47,13 @@ export async function indexDiscordMessage(db:DB,source:Source,msg:Indexable):Pro
   const row=await db.query(
     "INSERT INTO reports(department,source,title,description,created_by,author_id,discord_channel_id,discord_thread_id,discord_message_id,external_key,guild_id,publication_status,indexed_at,content_state,sync_state,tags,attachments,origin_created_at,occurred_at) "+
     "VALUES($1,'discord_manual',$2,$3,$4,$4,$5,$6,$7,$8,$9,'indexed',now(),$10,$11,$12,$13,$14,$14) "+
-    "ON CONFLICT(external_key) DO UPDATE SET "+
+    "ON CONFLICT(guild_id,discord_message_id) WHERE discord_message_id IS NOT NULL DO UPDATE SET "+
     "discord_thread_id=EXCLUDED.discord_thread_id,updated_at=now(),indexed_at=now(),"+
     "tags=EXCLUDED.tags,attachments=EXCLUDED.attachments,content_state=EXCLUDED.content_state,"+
     "sync_state=EXCLUDED.sync_state,description=CASE WHEN EXCLUDED.content_state='available' THEN EXCLUDED.description ELSE reports.description END "+
     "WHERE reports.deleted_at IS NULL AND reports.guild_id=EXCLUDED.guild_id AND reports.discord_channel_id=EXCLUDED.discord_channel_id RETURNING id",
     [source.department,title,content.slice(0,15000),msg.authorId,source.channel_id,isThread?msg.channelId:null,msg.id,
-      "discord:"+msg.id,IDS.guild,state,state==="available"?"complete":"partial",
+      null,IDS.guild,state,state==="available"?"complete":"partial",
       JSON.stringify(msg.tags),JSON.stringify(source.capture_content?msg.attachments:[]),msg.createdAt]);
   return row.rowCount?"indexed":"ignored";
 }
