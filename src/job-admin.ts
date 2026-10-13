@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import type { DB } from "./db.js";
 import { transaction } from "./db.js";
+import { confirmGithubPublication,releaseCancelledBatch } from "./github-batches.js";
 import type { Config } from "./config.js";
 import type { Client } from "discord.js";
 import { requireUser } from "./auth.js";
@@ -66,6 +67,7 @@ export async function registerJobAdmin(app:FastifyInstance,db:DB,config:Config,d
           : await c.query("UPDATE announcements SET status='published',discord_message_id=$2,published_at=COALESCE(published_at,now()) WHERE id=$1 RETURNING id",
               [job.payload.id,decision.messageId]);
         if(!domain.rowCount)throw conflict();
+        if(job.kind==="report_publish")await confirmGithubPublication(c,String(job.payload.reportId));
       }else if(decision.action==="retry"){
         if(job.attempts>=10)throw Object.assign(new Error("Retry limit reached"),{statusCode:409});
         const updated=await c.query("UPDATE automation_jobs SET status='queued',run_at=now(),locked_at=NULL,last_error=NULL WHERE id=$1 AND status IN ('needs_reconciliation','failed') RETURNING id",[id]);
@@ -75,7 +77,10 @@ export async function registerJobAdmin(app:FastifyInstance,db:DB,config:Config,d
       }else{
         const updated=await c.query("UPDATE automation_jobs SET status='cancelled',last_error='Cancelled by ADMIN after reconciliation' WHERE id=$1 AND status IN ('needs_reconciliation','failed') RETURNING id",[id]);
         if(!updated.rowCount)throw conflict();
-        if(job.kind==="report_publish")await c.query("UPDATE reports SET publication_status='cancelled' WHERE id=$1",[job.payload.reportId]);
+        if(job.kind==="report_publish"){
+          await c.query("UPDATE reports SET publication_status='cancelled' WHERE id=$1",[job.payload.reportId]);
+          await releaseCancelledBatch(c,String(job.payload.reportId));
+        }
       }
       await c.query("INSERT INTO audit_events(actor_id,action,target_kind,target_id,meta) VALUES($1,$2,'automation_job',$3,$4)",
         [actor.userId,"job.reconcile."+decision.action,String(id),JSON.stringify({reason:decision.reason})]);
@@ -92,7 +97,10 @@ export async function registerJobAdmin(app:FastifyInstance,db:DB,config:Config,d
       if(!result.rowCount)throw conflict();
       const job=result.rows[0]!;
       if(job.kind==="announcement")await c.query("UPDATE announcements SET status='draft' WHERE id=$1 AND status='scheduled'",[job.payload.id]);
-      if(job.kind==="report_publish")await c.query("UPDATE reports SET publication_status='cancelled' WHERE id=$1",[job.payload.reportId]);
+      if(job.kind==="report_publish"){
+        await c.query("UPDATE reports SET publication_status='cancelled' WHERE id=$1",[job.payload.reportId]);
+        await releaseCancelledBatch(c,String(job.payload.reportId));
+      }
       await c.query("INSERT INTO audit_events(actor_id,action,target_kind,target_id,meta) VALUES($1,'job.cancel','automation_job',$2,$3)",
         [actor.userId,String(id),JSON.stringify({reason})]);
     });

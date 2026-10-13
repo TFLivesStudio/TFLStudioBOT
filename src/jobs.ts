@@ -8,6 +8,8 @@ import { postAnnouncement } from "./presentation.js";
 import { postToDestination } from "./discord.js";
 import { runImportBatch } from "./report-import.js";
 import { captureStructure } from "./auditor.js";
+import { allocateGithubBatch,confirmGithubPublication } from "./github-batches.js";
+import { transaction } from "./db.js";
 
 type Job = {id:string;kind:string;payload:Record<string,unknown>;attempts:number};
 const safeMessage=(e:unknown) => e instanceof Error ? e.name.slice(0,40)+": "+e.message.slice(0,250) : "Unknown error";
@@ -79,10 +81,16 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       await db.query("UPDATE reports SET publication_status='publishing',updated_at=now() WHERE id=$1",[id]);
       remoteStarted=true;
       const posted=await postToDestination(discord,destinationId,report.title,report.description,report.tags,"STUDIO-REPORT-"+id);
-      await db.query("UPDATE reports SET discord_message_id=$2,discord_thread_id=$3,publication_status='published',sync_state='complete',updated_at=now() WHERE id=$1",
-        [id,posted.messageId,posted.threadId]);
-      await db.query("UPDATE automation_jobs SET remote_message_id=$2,remote_channel_id=$3 WHERE id=$1",
-        [job.id,posted.messageId,posted.threadId??destinationId]);
+      await transaction(db,async c=>{
+        await c.query("UPDATE reports SET discord_message_id=$2,discord_thread_id=$3,publication_status='published',sync_state='complete',updated_at=now() WHERE id=$1",
+          [id,posted.messageId,posted.threadId]);
+        await confirmGithubPublication(c,id);
+        await c.query("UPDATE automation_jobs SET status='done',completed_at=now(),last_error=NULL,remote_message_id=$2,remote_channel_id=$3,updated_at=now() WHERE id=$1",
+          [job.id,posted.messageId,posted.threadId??destinationId]);
+        await c.query("UPDATE job_attempts SET ended_at=now(),outcome='done',safe_error=NULL WHERE job_id=$1 AND attempt=$2",
+          [job.id,job.attempts]);
+      });
+      return true;
     }else if(job.kind==="github_sync"){
       if(!config)throw new Error("GitHub sync requires configuration");
       await pollGithubCommits(db,config,String(job.payload.repo));
@@ -97,18 +105,7 @@ export async function runOneJob(db:DB,discord:Client,config?:Config):Promise<boo
       await createReport(db,discord,destination,"RELEASE / "+version,text.slice(0,1500),null,
         "github_release:"+String(p.repo)+":"+String(p.releaseId));
     }else if(job.kind==="github_push_summary"){
-      const repo=String(job.payload.repo);
-      const rows=await db.query<{sha:string;author:string;title:string;url:string}>(
-        "SELECT sha,author,title,url FROM github_commits WHERE repository=$1 AND reported_at IS NULL ORDER BY committed_at,sha LIMIT 25",[repo]);
-      if(rows.rows.length){
-        const lines=rows.rows.map(c=>"- "+c.title.slice(0,115)+" — "+c.author.slice(0,60)+"\n"+c.url);
-        const key="github_push:"+repo+":"+rows.rows.map(c=>c.sha).join(",");
-        await createReport(db,discord,destination,"DESARROLLO / "+rows.rows.length+" commits",lines.join("\n").slice(0,1500),null,key);
-        await db.query("UPDATE github_commits SET reported_at=now() WHERE repository=$1 AND sha=ANY($2::text[])",[repo,rows.rows.map(c=>c.sha)]);
-        const more=await db.query("SELECT 1 FROM github_commits WHERE repository=$1 AND reported_at IS NULL LIMIT 1",[repo]);
-        if(more.rowCount)await db.query("INSERT INTO automation_jobs(kind,payload,run_at,dedup_key) VALUES('github_push_summary',$1,now()+interval '1 minute',$2) ON CONFLICT DO NOTHING",
-          [JSON.stringify({repo}),"push:backlog:"+repo+":"+job.id]);
-      }
+      await allocateGithubBatch(db,String(job.payload.repo),destination);
     }else if(job.kind==="announcement"){
       const id=String(job.payload.id);
       const rows=await db.query<{target_channel_id:string;title:string;body:string;status:string;visual_payload:unknown;discord_message_id:string|null}>(
