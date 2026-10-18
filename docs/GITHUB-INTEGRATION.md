@@ -1,3 +1,5 @@
+> Ruta actual de implementación: `apps/core/src/github*.ts`. Comandos de instalación y ejecución: Bun, ver README. La web integra estas rutas; desarrollo y releases siguen separados.
+
 # GitHub / commits, releases y procedencia — 0.3.0
 
 Fuente principal futura: TFLivesStudio/TFLClient, sembrada desactivada. No se ha configurado webhook real ni publicado en Discord.

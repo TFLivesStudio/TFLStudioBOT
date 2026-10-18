@@ -1,33 +1,41 @@
 {
-  "name": "tfl-studio-core",
-  "version": "0.3.0",
+  "name": "tfl-studio",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.3",
   "engines": {
-    "node": ">=22.12.0"
+    "bun": "1.4.3"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
-    "migrate": "tsx src/migrate.ts",
-    "check": "npm run typecheck && npm test"
-  },
-  "dependencies": {
-    "@fastify/cors": "^11.1.0",
-    "@fastify/rate-limit": "^10.3.0",
-    "discord.js": "^14.23.2",
-    "dotenv": "^17.2.2",
-    "fastify": "^5.6.1",
-    "pg": "^8.16.3",
-    "zod": "^3.25.76"
+    "dev": "bun run --parallel --filter \"@tfl/core\" --filter \"@tfl/web\" dev",
+    "dev:core": "bun run --filter @tfl/core dev",
+    "dev:web": "bun run --filter @tfl/web dev",
+    "start": "bun run --filter @tfl/core start",
+    "migrate": "bun packages/database/src/migrate.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.tests.json && bun run --filter \"*\" typecheck",
+    "lint": "eslint .",
+    "test": "bun scripts/test.ts",
+    "test:e2e": "playwright test",
+    "build": "bun run --filter \"*\" build",
+    "check": "bun run typecheck && bun run lint && bun run test && bun run build",
+    "test:integration": "bun scripts/integration.ts",
+    "format": "prettier --write apps packages scripts tests *.json *.ts *.mjs .github/workflows/*.yml",
+    "format:check": "prettier --check apps packages scripts tests *.json *.ts *.mjs .github/workflows/*.yml"
   },
   "devDependencies": {
-    "@types/node": "^22.18.0",
-    "@types/pg": "^8.15.5",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "@playwright/test": "1.58.2",
+    "@types/bun": "1.4.3",
+    "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.46.0"
   }
 }

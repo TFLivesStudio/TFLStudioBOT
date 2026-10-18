@@ -1,3 +1,5 @@
+> Archivo histórico de 0.3. Para el monorepo actual consultar [README](../README.md) y [matriz del rework](REWORK_TRACEABILITY.md).
+
 # Reportes, índice e importaciones — 0.3.0
 
 ## Fuentes

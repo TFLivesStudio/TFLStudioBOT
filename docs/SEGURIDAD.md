@@ -1,27 +1,15 @@
-# Seguridad TFL Studio Core — 0.3.0
+# Seguridad 0.4
 
-## Modelo de confianza
+Las credenciales compartidas en conversaciones anteriores se consideran potencialmente comprometidas. Rotar BOT_TOKEN en Discord Developer Portal; actualizar el contenedor privado y revocar el valor anterior. Rotar DISCORD_CLIENT_SECRET, SESSION_SECRET, secretos de webhook y tokens GitHub que hayan sido expuestos. Rotar SESSION_SECRET invalida la derivación CSRF; eliminar las sesiones existentes durante una ventana autorizada fuerza nuevos logins. Nunca pegar nuevos valores en un issue, PR, documento o captura.
 
-Guild único 1264656310205415474; el rol ADMIN 1282541815802892289 es la única autoridad global. Studio NO es administrativo. Los roles de Minecraft, Hosting, Publicidad, Devs, etc. solo dan ámbito operativo. Discord conserva aprobación humana obligatoria y Core nunca autoaprueba solicitudes.
+OAuth state aleatorio, cookies host-only HttpOnly, SameSite=Lax y Secure en producción. Sesiones persistidas por hash. CSRF HMAC y validación estricta de Origin tanto en BFF como en Core. CORS acotado, rate limit de 100 peticiones por minuto en Core, cuerpo máximo 1 MiB y límites de paginación. El proxy no es un mecanismo de autenticación alternativo.
 
-## Identidad y sesiones
+Las páginas verifican sesión en servidor y las rutas vuelven a comprobarla en cada operación. No hay endpoints de asignación de privilegios globales ni aprobación de miembros. Los cambios visibles del navegador no sustituyen controles de backend.
 
-OAuth2 identify, state aleatorio de corta duración, cookie HttpOnly SameSite=Lax y Secure en producción. El backend consulta membresía actual, pending y roles actuales en Discord REST para cada petición protegida. Hash del token de sesión en PostgreSQL; CSRF derivado mediante HMAC de SESSION_SECRET y sesión, estable en dos pestañas y revocado al cerrar sesión. Todas las mutaciones de navegador exigen Origin permitido y X-CSRF-Token válido. Los webhooks GitHub requieren HMAC-SHA256 sobre bytes originales.
+El logger elimina cookies, Authorization, CSRF y Set-Cookie. Su serializador de URL omite querystrings para no registrar códigos OAuth. Los errores HTTP 5xx se presentan de forma genérica. Los secretos son variables privadas; web solo recibe CORE_INTERNAL_URL y WEB_ORIGIN del lado servidor. No usar NEXT_PUBLIC_ para ninguna de ellas ni pasar credenciales del bot a Vercel.
 
-## Autorización por recurso
+El contenido se presenta como texto React, sin HTML arbitrario ni ejecución de adjuntos. Discord utiliza allowedMentions vacío y neutraliza @ en mensajes. Los embeds solo admiten URLs HTTPS según esquema compartido. Los CSV neutralizan inicios de fórmulas. Los importes usan enteros seguros al escribir y cadenas exactas al sumar SQL.
 
-Los foros usan ViewChannel+SendMessages para nuevas publicaciones y SendMessagesInThreads para respuestas. Las sobrescrituras @everyone, roles y miembros y Administrator se aplican en permissions.ts. Tanto slash como HTTP utilizan esta política. Las respuestas por ID (p. ej. reports/{id} y guides/{id}) comprueban departamento y permisos vivos; consultas de Billing, personal, auditor, automatizaciones, importaciones, GitHub y conciliaciones exigen ADMIN.
+Todas las pruebas externas son simulaciones explícitas; la integración usa studio_test. La fixture de navegador se inicia como proceso aparte en loopback y nunca se importa desde apps. No contiene puertas de acceso en producción.
 
-## Contenido y datos
-
-Indexación opt-in por canal auditado. No recopilar todo el servidor ni Billing/Administración Global como índices comunes. MessageContent desactivado por defecto y requiere Developer Portal + autorización. Adjuntos no se descargan indiscriminadamente. No se generan menciones masivas desde texto externo: allowedMentions.parse vacío. Los datos financieros usan unidades menores enteras y no se mezclan monedas.
-
-PostgreSQL consulta parametrizada, migraciones versionadas, control de versiones en guías/Billing/anuncios, solicitudes con body limit y rate limits HTTP. Secretos solo en mecanismos privados, no subir .env ni exports a GitHub. Los logs estructurados no deben incluir tokens, notas privadas o contenido de solicitudes.
-
-## Límites de 0.3
-
-No probada contra OAuth/Discord/GitHub reales ni revisados todos los overwrites de producción. Los worker threads y las comunicaciones con plataformas externas no garantizan exactamente-una-vez. Falta decidir política de retención/borrado y probar backups y rollback, revisar rate limits bajo carga y permisos mínimos del rol de bot antes de producción.
-
-## Configuración de dominios
-
-Ejemplos futuros (no confirmados): studio.tflives.com y api.studio.tflives.com, mismo sitio organizacional. Reverse proxy HTTPS con CORS_ORIGIN exacto, COOKIE_SECURE=true, trustProxy desactivado salvo configuración acotada, DB aislada.
+Al alojar: HTTPS, PostgreSQL privado, privilegios mínimos del bot, rotación, backups y permisos de canal revisados. Mantener previews sin variables de Core de producción hasta que haya un entorno de revisión autorizado. La CSP permite inline necesario para Next; no se presenta como una CSP basada en nonces.

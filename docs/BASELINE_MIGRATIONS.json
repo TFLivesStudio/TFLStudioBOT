@@ -1,0 +1,18 @@
+{
+  "commit": "e7db70ab41dab0e818b63b275fa6f9d4fb4a1eed",
+  "sha256": {
+    "001_initial.sql": "6f76306e29db4c821e8eff0c469254c96b104f999c104abfd44bc75b0cf9ffa5",
+    "002_sources_and_content.sql": "27bc5b16e1a5259876833c21189d1bba68185b838a1d3f524b6bb2f08f5dcc83",
+    "003_billing_subscriptions.sql": "8f91b747ab451be97428273b0305bf47ab3a4a5b3634c366e24880ce0e2e55f7",
+    "004_outbox_and_report_index.sql": "33777b2e94aaa473135f2a57b1c038e58686e7ddff3b43d600ec77e9d8ae595c",
+    "005_github_integrity.sql": "17bf8d57585394c9f1fe3142f34a14880ddb5dc89b2c9b720b40af343ada3ecf",
+    "006_auditor_snapshots.sql": "5ba13e8487e1e35878fd4d22541374cf9b62c4d184711cf490749f14f3ed27d5",
+    "007_report_cancelled.sql": "694a6fb01dfd50a1092c0ec3edd9f32390030c949a6aef2a0d482de62b0f85ae",
+    "008_coverage_and_projects.sql": "e7147bb3e48570d6428ffb4f1618df5c56bece8a3c56c51fdf346e89fe8c749a",
+    "009_github_commit_associations.sql": "ac28fdd1da3638d5d53f7330b0a4ae41177461951e515924feb837c18746f8e6",
+    "010_import_recovery.sql": "15080f5b3e6b05d2ec2fc9e4532cd670f8bf087c9e35b2065c301bd65dc06b32",
+    "011_admin_workflows.sql": "9b7fdc9c4c95f9d420dbb9884b07912e1440e14103956557633936b3b2a01688",
+    "012_github_release_provenance.sql": "c955a2696a6c10002320c0cf6f0658140512324568f88cc7c1170406019e6ed2",
+    "013_report_sync_telemetry.sql": "10c9ed89014abdde73b539e295887af0ad9269c10d1c6354ff74ba2d24a7d8c2"
+  }
+}
