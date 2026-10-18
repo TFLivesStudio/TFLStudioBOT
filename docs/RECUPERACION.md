@@ -1,36 +1,15 @@
-# Recuperación operativa y conciliación — 0.3.0
+# Recuperación y rollback
 
-## Estados y transiciones
+Antes de integrar 0.4, conservar el commit, lockfile e imagen anterior, un backup restaurable de PostgreSQL y la configuración privada fuera de Git. Probar la restauración en otra base: que un archivo de backup exista no demuestra que funcione.
 
-automation_jobs: queued -> running -> done; fallos previos a I/O remoto pueden reprogramarse con backoff; después de iniciar publicación Discord, los fallos ambiguos pasan a needs_reconciliation. Los jobs también pueden terminar failed o cancelled. Cada intento se audita en job_attempts.
+Para rollback del código:
 
-La transacción SQL no permanece abierta durante la petición a Discord. El worker reclama atómicamente y guarda resultado remoto con el estado del dominio y las asociaciones GitHub cuando es posible.
+1. Parar el Core 0.4 y la web conectada para evitar nuevas escrituras mientras cambia el operador.
+2. Volver al commit/imagen 0.3 y su configuración de origen anterior. Restaurar también las URLs OAuth/CORS que ese despliegue utilizaba; la cookie de la web 0.4 no se transfiere mágicamente al host anterior.
+3. Mantener la migración 014 y sus datos: es una tabla aditiva no utilizada por 0.3. No borrar reportes, asociaciones GitHub ni sesiones para «limpiar» el esquema.
+4. Arrancar solo una instancia persistente. Verificar DB, Gateway y heartbeat.
+5. Revisar jobs `running`, `failed` y `needs_reconciliation` antes de cualquier reintento. El resultado de una escritura remota incierta no puede recuperarse deduciéndolo de un timeout.
 
-## GitHub
+Si se requiere recuperación de datos, restaurar primero en una base nueva y comprobar registros, monedas exactas, esquemas e identidades externas. Cambiar DATABASE_URL solo tras una decisión operativa autorizada. No ejecutar DROP SCHEMA ni restauraciones sobre la base activa como parte de una prueba.
 
-Los SHA detectados se guardan en github_commits. La asignación a reporte aparece en github_report_commits, pero NO marca reported_at. Si falla Discord, los SHA siguen vinculados a un reporte pendiente o ambiguo. Solo el éxito confirmado o enlace remoto ADMIN verificado establece reported_at. Si se cancela definitivamente un reporte no publicado, sus SHA pasan de nuevo al conjunto asignable; no se pierden silenciosamente.
-
-## Resolver publicaciones ambiguas
-
-API ADMIN:
-- GET /api/v1/jobs con filtro status, GET /api/v1/jobs/{id} para intentos.
-- POST /api/v1/jobs/{id}/reconcile con action=link, channelId, messageId y motivo. Comprueba bot autor, Guild, canal/foro y marca STUDIO-REPORT, STUDIO-ANNOUNCEMENT o STUDIO-GUIDE; nunca confiar en texto enviado por frontend.
-- action=retry exige confirmRemoteAbsent=true, motivo y máximo de intentos; existe riesgo de duplicación residual.
-- action=cancel anula un trabajo incierto mediante ADMIN y registra su razón. Cancelación queued disponible también por /api/v1/jobs/{id}/cancel.
-
-No marcar como hecho si la operación remota pudo haberse ejecutado y no hay prueba. Exactamente-una-vez entre Discord y PostgreSQL no puede prometerse.
-
-## Importaciones
-
-Cada report_import_run mantiene cursor, phase, processed, errors, lease_token y lease_expires_at. La misma transacción que confirma progreso programa el siguiente lote. En caso de crash, recoverOrphanedImports reconstruye un trabajo de continuación para ejecuciones huérfanas autorizadas, o las pausa si la fuente dejó de estar habilitada. API: POST /api/v1/report-index/imports/recover, /{id}/pause, /{id}/resume, /{id}/cancel.
-
-El dry-run no inserta reportes ni envía mensajes; una importación real requiere fuente habilitada y permisos Discord correctos.
-
-## Manual del operador
-
-1. Inspeccionar /api/v1/diagnostics y /api/v1/jobs/metrics.
-2. Filtrar needs_reconciliation, comprobar destino, marcador, último error e intentos.
-3. Confirmar ID Discord remoto antes de action=link, o documentar ausencia antes de retry.
-4. Inspeccionar importaciones paused/running y su lease, recuperar huérfanas por API.
-5. Si la fuente GitHub fue desactivada, nunca forzar su publicación; revisar trabajos ya en vuelo.
-6. Mantener backup y auditar motivos de todas las decisiones ADMIN.
+Los scripts de test que eliminan schemas solo funcionan dentro de una base llamada studio_test y NODE_ENV=test. No usarlos para datos operativos. Las guías conservan revisiones y los anuncios desde 0.4; esa capacidad no reemplaza un backup de PostgreSQL.

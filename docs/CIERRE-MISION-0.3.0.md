@@ -1,3 +1,5 @@
+> Archivo histórico de 0.3. Para el monorepo actual consultar [README](../README.md) y [matriz del rework](REWORK_TRACEABILITY.md).
+
 # TFL STUDIO CORE 0.3.0 — INFORME TÉCNICO DE CIERRE
 
 **Fecha:** 13 de octubre de 2026 UTC (12 de octubre en Colombia).  

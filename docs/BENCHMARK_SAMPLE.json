@@ -1,0 +1,23 @@
+{
+  "method": "One sample each, same environment, liveness HTTP only; no Discord/PG, 20 warmups and 200 sequential requests",
+  "node": {
+    "kind": "synthetic_liveness_no_discord_no_postgresql",
+    "runtime": "Node v24.19.0",
+    "startupMs": 553.75,
+    "rssMiB": 143.74,
+    "idleCpuMsPer500Ms": 2.447,
+    "requests": 200,
+    "p50Ms": 1.548,
+    "p95Ms": 1.738
+  },
+  "bun": {
+    "kind": "synthetic_liveness_no_discord_no_postgresql",
+    "runtime": "Bun 1.4.3",
+    "startupMs": 320.9,
+    "rssMiB": 81.73,
+    "idleCpuMsPer500Ms": 7.491,
+    "requests": 200,
+    "p50Ms": 0.202,
+    "p95Ms": 0.329
+  }
+}

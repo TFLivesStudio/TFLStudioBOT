@@ -1,21 +1,19 @@
-# MIGRACIONES POSTGRESQL — 0.3.0
+# PostgreSQL y migraciones
 
-| Versión | Esquema |
-|---|---|
-| 001_initial.sql | Sesiones, personal, anuncios, Billing, reportes y trabajos |
-| 002_sources_and_content.sql | GitHub, guías versionadas, plantillas |
-| 003_billing_subscriptions.sql | Suscripciones |
-| 004_outbox_and_report_index.sql | Outbox, intentos e índice |
-| 005_github_integrity.sql | Configuración y cursores GitHub |
-| 006_auditor_snapshots.sql | Inventarios |
-| 007_report_cancelled.sql | Estado cancelled |
-| 008_coverage_and_projects.sql | Cobertura y proyectos |
-| 009_github_commit_associations.sql | Asociación persistente SHA/reporte, migración conservadora reported_at |
-| 010_import_recovery.sql | Lease, checkpoint y fuente exclusiva de importación |
-| 011_admin_workflows.sql | Anuncios/guías/Billing con versiones y automatizaciones |
-| 012_github_release_provenance.sql | Tags, releases, SHA/rangos verificables |
-| 013_report_sync_telemetry.sql | Estado detallado de Discord y heartbeat |
+Se conservan pg y sus consultas parametrizadas. No se añadió ORM. Las migraciones viven en la raíz; el runner de packages/database resuelve su ruta desde import.meta.url, independientemente del directorio de trabajo.
 
-Los scripts 001-008 históricos NO se modificaron. Las migraciones nuevas agregan tablas/columnas e índices; la 009 reconstruye únicamente asociaciones demostrables por SHA, no inventa historial desconocido.
+Las trece migraciones originales son byte-idénticas al commit e7db70ab41dab0e818b63b275fa6f9d4fb4a1eed. Sus SHA256 se verifican en una prueba. No se alteran las asociaciones históricas de reportes, SHAs ni timestamps.
 
-CI ejecuta el migrador dos veces en PostgreSQL 16 aislado, después las pruebas y build. **Antes de producción:** backup restaurable, verificación de datos antiguos en staging, revisión de permisos del usuario SQL y plan de restauración. Un rollback de código no revierte por sí mismo el esquema.
+014 añade únicamente announcement_revisions: cada edición posterior conserva la versión anterior dentro de la misma transacción y con bloqueo/versión optimista. No genera revisiones históricas ficticias.
+
+```bash
+DATABASE_URL=postgres://USER:PASSWORD@HOST:PORT/DATABASE bun run migrate
+```
+
+El comando solo requiere DATABASE_URL. No abre Discord ni exige credenciales del bot. Guarda schema_migrations y usa advisory lock de transacción por archivo; una segunda ejecución no reaplica SQL. Los SQL contienen DDL que no debe ejecutarse manualmente dos veces fuera del runner.
+
+La suite de upgrade crea un schema aislado dentro de studio_test, aplica 001–013, guarda datos representativos de 0.3, ejecuta 014 con el runner dos veces y comprueba cuerpos, reportes, precisión monetaria y ausencia de historial inventado. Al acabar elimina exclusivamente ese schema de prueba.
+
+Producción: backup verificado antes del cambio, parada del Core antiguo, migración controlada y arranque de 0.4. La configuración de conexión debe corresponder al contenedor real: 127.0.0.1 dentro de un contenedor no es el host VPS. Usar red privada y nombre de servicio o dirección autorizada.
+
+Rollback de código a 0.3 puede dejar la tabla 014 intacta; no hace falta eliminar datos para volver al código anterior. La recuperación de datos requiere restaurar un backup en otra base y validar su contenido antes de cambiar DATABASE_URL. Ver [Recuperación](RECUPERACION.md).

@@ -1,0 +1,18 @@
+# Uso del dashboard
+
+Entrar con Discord desde `/login`. Core verifica pertenencia aprobada al guild, roles actuales y permisos efectivos. ADMIN ve los módulos globales; el personal departamental dispone de reportes y guías autorizadas. La pestaña de publicidad aparece para ADMIN o miembros con acceso a publicidad.
+
+En una tabla, abrir **•••** para leer, editar, consultar versiones o ejecutar una transición permitida. Los formularios comprueban formatos y Core vuelve a validar toda la operación. Un conflicto 409 exige actualizar la vista: no se sobrescribe silenciosamente la versión de otro administrador.
+
+- **Inicio:** reportes recientes, métricas segmentadas y diagnóstico global para ADMIN. Sin diagnóstico no se inventan ceros ni un worker saludable. La disponibilidad del worker exige heartbeat reciente.
+- **Reportes:** aplicar filtros explícitamente. La exportación CSV corresponde a la página actual y los mismos filtros. Crear un reporte guarda una intención idempotente: `queued` no significa que Discord ya lo recibió.
+- **Anuncios:** editar solo borradores; añadir hasta diez embeds y campos conforme a límites compartidos. Las plantillas habilitadas se pueden aplicar al constructor. La previsualización es aproximada. Programar/publicar exige confirmación y genera un trabajo; cancelar solo funciona antes de que se reclame. Las versiones de contenido empiezan con las ediciones de 0.4: el pasado no se reconstruye sin evidencia.
+- **Guías:** cuerpo como texto legible con saltos de línea; no se ejecuta HTML. Se pueden editar, restaurar revisiones, archivar y vincular hilos del foro autorizado. La publicación nueva está limitada al tamaño que soporta el Core existente (1450 caracteres de cuerpo). Una guía vinculada o modificada puede mostrar conflicto de sincronización; no se pisa automáticamente el hilo de Discord.
+- **GitHub:** fuentes deshabilitadas por defecto. Desarrollo y releases están en pestañas distintas. Para commits indicar owner/name. Los SHAs de releases proceden de comparaciones verificadas, no similitudes de texto.
+- **Finanzas:** números enteros en unidades menores, incluidos egresos negativos. Ediciones requieren motivo y versión. No hay conversión automática de monedas ni un estado bancario de pago inventado: se conservan active/archived/void para registros y active/paused/cancelled para suscripciones. Exportar JSON descarga solo la página visible.
+- **Equipo:** el directorio no representa a todos los miembros de Discord, sino a usuarios con asignaciones registradas. Alta y retirada solo cambian registros internos; los permisos efectivos provienen de Discord. No se admite autoasignación.
+- **Automatizaciones:** la regla se crea apagada. Para modificarla hay que deshabilitarla; activar o ejecutar requiere versión vigente. Solo se ofrecen las acciones cerradas del Core; no existe ejecución de shell.
+- **Trabajos:** revisar intentos. Antes de reintentar un resultado incierto hay que comprobar la ausencia de publicación remota. Vincular exige ID de canal, mensaje y referencia verificables; cancelar o reintentar exige motivo. No se reintenta automáticamente un envío incierto.
+- **Auditoría:** snapshots de lectura, descargas JSON/Markdown y comparación por ID. El índice es opt-in; los imports pueden ser simulaciones y mantener cobertura parcial. Las fuentes históricas y el intent de contenido necesitan autorización y configuración real.
+
+Las preferencias se guardan en este navegador: tema claro/oscuro/sistema, acento, densidad, sidebar y avisos. Las columnas se guardan por tabla. No se sincronizan entre equipos ni se guardan tokens en localStorage. La búsqueda global encuentra módulos y ofrece buscar el texto en reportes; no es un buscador universal de contenidos financieros.

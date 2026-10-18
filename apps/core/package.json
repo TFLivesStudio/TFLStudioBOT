@@ -1,0 +1,27 @@
+{
+  "name": "@tfl/core",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": "1.4.3"
+  },
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch src/index.ts",
+    "start": "bun --env-file=../../.env src/index.ts",
+    "build": "bun build src/index.ts --target=bun --packages=external --outdir=dist",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "discord.js": "^14.23.2",
+    "dotenv": "^17.2.2",
+    "fastify": "^5.6.1",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76",
+    "@tfl/shared": "workspace:*",
+    "@tfl/database": "workspace:*",
+    "@tfl/config": "workspace:*"
+  }
+}

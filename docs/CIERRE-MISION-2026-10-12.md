@@ -1,3 +1,5 @@
+> Archivo histórico de 0.3. Para el monorepo actual consultar [README](../README.md) y [matriz del rework](REWORK_TRACEABILITY.md).
+
 # TFL STUDIO CORE / INFORME DE CORRECCIÓN Y CONSOLIDACIÓN
 
 Fecha: 12 de octubre de 2026

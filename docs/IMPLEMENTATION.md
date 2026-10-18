@@ -1,3 +1,5 @@
+> Archivo histórico de 0.3. Para el monorepo actual consultar [README](../README.md) y [matriz del rework](REWORK_TRACEABILITY.md).
+
 # TFL STUDIO CORE — ESTADO 0.3.0
 
 **Fase:** consolidación funcional y preparación para ensayos operativos. NO V1 de producción.
